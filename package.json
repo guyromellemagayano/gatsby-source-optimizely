@@ -1,6 +1,6 @@
 {
 	"name": "@epicdesignlabs/gatsby-source-optimizely",
-	"version": "2.0.1",
+	"version": "1.0.0",
 	"description": "This unofficial source plugin makes Optimizely API data available in GatsbyJS sites. Currently in active development.",
 	"scripts": {
 		"autotest": "supervisor -q -n exit -x node_modules/.bin/_mocha --",
@@ -13,11 +13,8 @@
 		"test": "yarn exectests && yarn lint",
 		"prepare": "cross-env NODE_ENV=production yarn build",
 		"validate": "yarn lint",
+		"release": "release-it --ci",
 		"prerelease": "git checkout main && git pull origin main && yarn && yarn validate && git add .",
-		"release": "standard-version -a",
-		"postrelease": "yarn release:*",
-		"release:tags": "git push --follow-tags origin main",
-		"release:github": "conventional-github-releaser -p angular",
 		"ci:validate": "rm -rf node_modules && yarn install --frozen-lockfile && yarn validate",
 		"prepublishOnly": "yarn ci:validate && yarn build"
 	},
@@ -67,7 +64,6 @@
 		"babel-preset-minify": "^0.5.2",
 		"chai": "^4.3.6",
 		"commitizen": "^4.2.4",
-		"conventional-github-releaser": "^3.1.5",
 		"cross-env": "^7.0.3",
 		"cz-conventional-changelog": "^3.3.0",
 		"dataloader": "^2.1.0",
@@ -85,8 +81,8 @@
 		"nyc": "^15.1.0",
 		"prettier": "^2.6.2",
 		"react": "^18.0.0",
+		"release-it": "^15.1.1",
 		"sinon": "^14.0.0",
-		"standard-version": "^9.5.0",
 		"supervisor": "^0.12.0"
 	},
 	"bugs": {
