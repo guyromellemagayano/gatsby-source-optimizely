@@ -1,7 +1,7 @@
 "use strict";
 
-import { FG_GREEN, FG_RED, FG_YELLOW } from "./constants";
 import { convertObjectToString } from "./utils/convertValues";
+import { logger } from "./utils/logger";
 import Optimizely from "./utils/optimizely";
 
 /**
@@ -36,7 +36,7 @@ const handleCreateNodeFromData = (item, nodeType, helpers) => {
  * ============================================================================
  */
 exports.onPreInit = () => {
-	console.log(FG_GREEN, "\n----- @epicdesignlabs/gatsby-source-optimizely plugin loaded successfully -----\n");
+	logger.info("@epicdesignlabs/gatsby-source-optimizely plugin loaded successfully");
 };
 
 /**
@@ -53,93 +53,115 @@ exports.pluginOptionsSchema = async ({ Joi }) => {
 					"string.empty": "The `auth.site_url` is empty. Please provide a valid URL.",
 					"string.required": "The `auth.site_url` is required."
 				})
-				.description("The URL of the Optimizely site"),
+				.description("The URL of the Optimizely/Episerver site"),
 			username: Joi.string()
 				.required()
 				.messages({
 					"string.empty": "The `auth.username` is empty. Please provide a valid username.",
 					"string.required": "The `auth.username` is required."
 				})
-				.description("The username of the Optimizely account"),
+				.description("The username of the Optimizely/Episerver account"),
 			password: Joi.string()
 				.required()
 				.messages({
 					"string.empty": "The `auth.password` is empty. Please provide a valid password.",
 					"string.required": "The `auth.password` is required."
 				})
-				.description("The password of the Optimizely account"),
-			grant_type: Joi.string().default("password").description("The grant type of the Optimizely account"),
-			client_id: Joi.string().default("Default").description("The client ID of the Optimizely account"),
-			headers: Joi.object().default({}).description("The headers for the Optimizely site")
+				.description("The password of the Optimizely/Episerver account"),
+			grant_type: Joi.string().default("password").description("The grant type of the Optimizely/Episerver account"),
+			client_id: Joi.string().default("Default").description("The client ID of the Optimizely/Episerver account"),
+			headers: Joi.object().default({}).description("The headers for the Optimizely/Episerver site")
 		})
 			.required()
 			.messages({
 				"object.required": "The `auth` object is required."
 			})
-			.description("The auth credentials for the Optimizely site"),
+			.description("The auth credentials for the Optimizely/Episerver site"),
 		endpoints: Joi.object()
 			.required()
 			.messages({
 				"object.required": "The `endpoints` is required."
 			})
-			.description("The endpoints for the Optimizely site")
+			.description("The endpoints for the Optimizely/Episerver site")
 	});
 };
 
 /**
  * ============================================================================
- * Source and cache nodes from the Optimizely API
+ * Source and cache nodes from the Optimizely/Episerver API
  * ============================================================================
  */
 exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, pluginOptions) => {
+	// Prepare plugin options
 	const {
 		auth: { site_url, username, password, grant_type = "password", client_id = "Default", headers = {} },
-		endpoints
+		endpoints = null,
+		log_level = "debug",
+		response_type = "json"
 	} = pluginOptions;
 
+	// Prepare node sourcing helpers
 	const helpers = Object.assign({}, actions, {
 		createContentDigest,
 		createNodeId
 	});
 
+	// Create a new Optimizely instance
 	const optimizely = new Optimizely({
 		site_url,
 		username,
 		password,
 		grant_type,
 		client_id,
-		headers
+		response_type,
+		headers,
+		log_level
 	});
 
-	// TODO: Process `endpoints` here
 	await Promise.allSettled(
-		Object.entries(endpoints).map(
-			async ([nodeName, endpoint]) =>
-				await optimizely
-					.get(endpoint)
-					.then((res) => {
-						console.log(FG_YELLOW, `\nProcessing ${nodeName} - ${endpoint}...`);
+		Object.entries(endpoints).map(async ([nodeName, endpoint]) => {
+			logger.warn(`Fetching data in ${nodeName} - ${endpoint}...`);
 
-						return { nodeName, res };
-					})
-					.catch((err) => err)
-		)
+			const response = await optimizely
+				.get(endpoint)
+				.then((data) => {
+					logger.info(`Success fetching data in ${nodeName} - ${endpoint}`);
+
+					return { nodeName, endpoint, data };
+				})
+				.catch((err) => {
+					logger.error(`Error fetching data in ${nodeName} - ${endpoint}: ${err.message}`);
+
+					throw err;
+				});
+
+			return response;
+		})
 	)
 		.then((results) => {
 			results.forEach((result) => {
 				if (result.status === "fulfilled") {
-					const { nodeName, res } = result.value;
+					const { nodeName, endpoint, data } = result.value;
 
-					return res && Array.isArray(res) && res.length > 0 ? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers)) : handleCreateNodeFromData(res, nodeName, helpers);
+					logger.warn(`Preparing data in ${nodeName} - ${endpoint} for node creation...`);
+
+					// Create node for each item in the response
+					return data && Array.isArray(data) && data.length > 0 ? data.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers)) : handleCreateNodeFromData(data, nodeName, helpers);
+				} else {
+					logger.error(`Error fetching data in ${result.value.nodeName} - ${result.value.endpoint}: ${result.reason.message}`);
+
+					return result.reason;
 				}
 			});
 
-			console.log(FG_GREEN, "\n----- Source nodes created successfully -----");
+			logger.info("Optimizely/Episerver source nodes created successfully");
 		})
 		.catch((err) => {
-			console.error(FG_RED, `\n----- An error occurred while fetching endpoint data: ${err.message} -----\n`);
+			logger.error(`An error occurred while fetching Optimizely/Episerver endpoint data: ${err.message}`);
+
+			return err;
 		})
 		.finally(() => {
-			console.log(FG_GREEN, "\n----- Fetching endpoint data done successfully -----\n");
+			logger.info("Fetching Optimizely/Episerver endpoint data done successfully");
 		});
 };

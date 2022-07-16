@@ -4,13 +4,15 @@ import axios from "axios";
 import { OPTIMIZELY_AUTH_ENDPOINT, REQUEST_ACCEPT_HEADER, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
 
 class Request {
-	constructor(hostname, username, password, grant_type, client_id, headers) {
+	constructor(hostname, { username = null, password = null, grant_type = "password", client_id = "default", headers = {}, response_type = "json", log_level = "debug" } = {}) {
 		this.hostname = hostname;
 		this.username = username;
 		this.password = password;
 		this.grant_type = grant_type;
 		this.client_id = client_id;
 		this.headers = headers;
+		this.response_type = response_type;
+		this.log_level = log_level;
 	}
 
 	// FIXME: Handle authentication request
@@ -36,6 +38,7 @@ class Request {
 		const RequestAxiosInstance = axios.create({
 			baseURL: this.hostname + REQUEST_URL_SLUG,
 			headers: this.headers,
+			responseType: this.response_type,
 			withCredentials: true,
 			timeout: REQUEST_TIMEOUT
 		});
@@ -56,23 +59,15 @@ class Request {
 			(err) => Promise.reject(err)
 		);
 
-		// Handle `GET` request
-		const getMethod = async (endpoint) =>
-			await RequestAxiosInstance.get(endpoint)
-				.then((res) => res.data)
-				.catch((err) => err);
-
-		// Handle `POST` request
-		const postMethod = async (endpoint, body) =>
-			await RequestAxiosInstance.post(endpoint, body)
-				.then((res) => res.data)
-				.catch((err) => err);
-
 		switch (method) {
-			case "GET":
-				return getMethod(path);
-			case "POST":
-				return postMethod(path, body);
+			case "get":
+				return await RequestAxiosInstance.get(path)
+					.then((res) => Promise.resolve(res))
+					.catch((err) => Promise.reject(err));
+			case "post":
+				return await RequestAxiosInstance.post(path, body)
+					.then((res) => Promise.resolve(res))
+					.catch((err) => Promise.reject(err));
 			default:
 				throw new Error(`The method ${method} is not supported.`);
 		}
