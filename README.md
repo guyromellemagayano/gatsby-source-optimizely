@@ -3,11 +3,23 @@
 This unofficial source plugin makes Optimizely/Episerver API data available in GatsbyJS sites. Currently in active development.
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
+![GitHub](https://img.shields.io/github/license/Epic-Design-Labs/gatsby-source-optimizely)
+![npm](https://img.shields.io/npm/dt/@epicdesignlabs/gatsby-source-optimizely)
+![GitHub issues](https://img.shields.io/github/issues/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub closed issues](https://img.shields.io/github/issues-closed/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub contributors](https://img.shields.io/github/contributors/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub package.json version](https://img.shields.io/github/package-json/v/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/Epic-Design-Labs/gatsby-source-optimizely)
+![npms.io (final)](https://img.shields.io/npms-io/maintenance-score/@epicdesignlabs/gatsby-source-optimizely)
+![npms.io (final)](https://img.shields.io/npms-io/quality-score/@epicdesignlabs/gatsby-source-optimizely)
 
 ## Features
 
-- Support for multiple Optimizely API versions
+- Support for multiple Optimizely/Episerver API versions
 - Support for additional headers
+- Log level options for Optimizely/Episerver API endpoint requests: `info`, `debug`, `warn`, `error`
 
 ## Installation and Setup
 
@@ -36,19 +48,14 @@ module.exports = {
 			resolve: "@epicdesignlabs/gatsby-source-optimizely",
 			options: {
 				auth: {
-					site_url: process.env.OPTMIZELY_API_SITE_URL // The URL of the Optimizely API site,
-					username: process.env.OPTMIZELY_API_USERNAME // The username of the Optimizely API user.,
-					password: process.env.OPTMIZELY_API_PASSWORD // The password of the Optimizely API user.,
-					grant_type: process.env.OPTMIZELY_API_GRANT_TYPE, // // The grant type of the Optimizely API user. Default is "password"
-					client_id: process.env.OPTMIZELY_API_CLIENT_ID, // The client ID of the Optimizely API user. Default is "Default"
+					site_url: process.env.OPTMIZELY_API_SITE_URL // The URL of the Optimizely/Episerver API site,
+					username: process.env.OPTMIZELY_API_USERNAME // The username of the Optimizely/Episerver API user.,
+					password: process.env.OPTMIZELY_API_PASSWORD // The password of the Optimizely/Episerver API user.,
+					grant_type: process.env.OPTMIZELY_API_GRANT_TYPE, // // The grant type of the Optimizely/Episerver API user. Default is "password"
+					client_id: process.env.OPTMIZELY_API_CLIENT_ID, // The client ID of the Optimizely/Episerver API user. Default is "Default"
 				},
-
-				// Add single or multiple `Optimizely` API endpoints to the source.
 				endpoints: {
 					OptimizelySites: "/v2.0/site",
-					OptimizelyContent: "/v2.0/content/994?expand=*",
-					OptimizelyContent: "/v2.0/content/994/children?expand=*",
-					OptimizelySearchContent: "/v2.0/search/content?expand=*",
 				},
 			},
 		},
@@ -56,34 +63,62 @@ module.exports = {
 };
 ```
 
-## Additional Options
+## Configuration Options
 
-### Headers
+### Endpoints
 
-Add additional headers to the `auth` request as follows:
+Add a single or multiple `endpoints`.
+
+```javascript
+options: {
+	// ...
+
+	endpoints: {
+		// Single endpoint
+		OptimizelySites: "/v2.0/site",
+
+		// Multiple endpoints
+		OptimizelyContent: "/v2.0/content/994?expand=*",
+		OptimizelyContent: "/v2.0/content/994/children?expand=*",
+		OptimizelySearchContent: "/v2.0/search/content?expand=*",
+	}
+}
+```
+
+### Additional Headers
+
+Add additional headers to the request as follows:
 
 ```javascript
 options: {
 	// ...
 
 	auth: {
-		siteUrl: process.env.OPTMIZELY_API_SITE_URL,
-		username: process.env.OPTMIZELY_API_USERNAME,
-		password: process.env.OPTMIZELY_API_PASSWORD,
-		grant_type: process.env.OPTMIZELY_API_GRANT_TYPE,
-		client_id: process.env.OPTMIZELY_API_CLIENT_ID,
 		headers: {
 			// Single header
 			"X-Custom-Header": "Custom Value",
 
 			// Mutiple headers
+			"Access-Control-Allow-Headers": "Custom Value",
 			"Access-Control-Allow-Credentials": "Custom Value",
 			"Access-Control-Allow-Origin": "Custom Value",
-
-			// Additional `Optimizely` or `Episerver` headers
-			"Accept-Language": "en"
+			"Access-Control-Allow-Methods": "Custom Value"
 		}
-	},
+	}
+}
+```
+
+### Log Level
+
+Set the log level for the Optimizely/Episerver API API requests. Supports `info`, `debug`, `warn`, `error`.
+
+**Default:** `debug`.
+
+```javascript
+options: {
+	// ...
+
+	logLevel: "debug";
 }
 ```
 
@@ -105,38 +140,133 @@ you can query the data as follows:
 
 ```graphql
 {
-	allBigCommerceProducts {
-		nodes {
-			name
-			price
-			id
-			sku
-			variants {
-				id
-				product_id
-				price
-				cost_price
-				image_url
-				sku
+	allOptimizelyContent(limit: 1) {
+		edges {
+			node {
+				contentBlocks {
+					contentLink {
+						id
+						expanded {
+							anchor1
+							subHeading
+							name
+							altText1
+							autoCrop
+							body
+							column1Body
+							column1PrimaryCTA {
+								target
+								text
+								title
+								url
+							}
+							column1SecondaryCTA {
+								target
+								text
+								title
+								url
+							}
+							column2PrimaryCTA {
+								target
+								text
+								title
+								url
+							}
+							column2SecondaryCTA {
+								target
+								text
+								title
+								url
+							}
+							contentType
+							disableImageZoom
+							displayFilter
+
+							eyeBrow
+							fourColumnDisplay
+							fullBleed
+							heading
+							headingH1
+							height
+							image {
+								url
+								guidValue
+								id
+								workId
+							}
+							image1 {
+								guidValue
+								id
+								url
+								workId
+							}
+							imageRatio
+							images {
+								displayOption
+							}
+							items {
+								displayOption
+							}
+							layout
+							link {
+								target
+								text
+								title
+								url
+							}
+							logo {
+								guidValue
+								id
+								url
+								workId
+							}
+							logoAltText
+							maxCount
+							mediaTextColor
+							noAutoPlay
+							orientation
+							parentPage {
+								guidValue
+								id
+								url
+								workId
+							}
+							primaryCTA {
+								target
+								text
+								title
+								url
+							}
+							recurse
+							secondaryCTA {
+								target
+								text
+								title
+								url
+							}
+							style
+							textAlign
+							textPosition
+							textPosition2
+							themeColor
+							useEpiSort
+							usePrimaryLinkStyle
+							video1 {
+								guidValue
+								id
+								url
+								workId
+							}
+						}
+						guidValue
+						workId
+					}
+					displayOption
+				}
+				metaDescription
+				metaTitle
 			}
-			reviews_count
-			reviews_rating_sum
-			page_title
-			images {
-				id
-				description
-				product_id
-				date_modified
-			}
-			bigcommerce_id
-			brand_id
-			custom_url {
-				url
-			}
-			categories
-			availability
 		}
-		totalCount
 	}
 }
 ```
