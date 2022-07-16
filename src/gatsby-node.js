@@ -82,7 +82,9 @@ exports.pluginOptionsSchema = async ({ Joi }) => {
 			.messages({
 				"object.required": "The `endpoints` is required."
 			})
-			.description("The endpoints for the Optimizely/Episerver site")
+			.description("The endpoints for the Optimizely/Episerver site"),
+		log_level: Joi.string().default("debug").description("The log level to use"),
+		response_type: Joi.string().default("json").description("The response type to use")
 	});
 };
 
