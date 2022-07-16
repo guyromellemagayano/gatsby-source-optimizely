@@ -80,7 +80,7 @@ options: {
 			"Access-Control-Allow-Credentials": "Custom Value",
 			"Access-Control-Allow-Origin": "Custom Value",
 
-			// Additional `optimizely` headers
+			// Additional `Optimizely` or `Episerver` headers
 			"Accept-Language": "en"
 		}
 	},
