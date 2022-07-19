@@ -10,7 +10,7 @@ export const REQUEST_HEADERS = {
 	"Accept": REQUEST_ACCEPT_HEADER,
 	"Content-Type": REQUEST_CONTENT_TYPE_HEADER
 };
-export const REQUEST_TIMEOUT = 10000;
+export const REQUEST_TIMEOUT = 0;
 
 // Optimizely
 export const OPTIMIZELY_AUTH_ENDPOINT = "/auth/token";
