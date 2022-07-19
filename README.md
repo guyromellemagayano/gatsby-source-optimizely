@@ -127,13 +127,13 @@ options: {
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `10000`.
+**Default:** `0`.
 
 ```javascript
 options: {
 	// ...
 
-	request_timeout: 10000;
+	request_timeout: 0;
 }
 ```
 
