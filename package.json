@@ -11,7 +11,7 @@
 		"test": "npm run lint",
 		"prepare": "cross-env NODE_ENV=production npm run build",
 		"validate": "npm run lint",
-		"ci:validate": "rm -rf node_modules && npm run install --frozen-lockfile && npm run validate",
+		"ci:validate": "rm -rf node_modules && npm ci && npm run validate",
 		"prepublishOnly": "npm run ci:validate && npm run build"
 	},
 	"homepage": "https://github.com/Epic-Design-Labs/gatsby-source-optimizely/blob/master/README.md",
