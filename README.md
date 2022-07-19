@@ -17,9 +17,10 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 
 ## Features
 
-- Support for multiple Optimizely/Episerver API versions
+- Support for multiple `optimizely/episerver` API versions
+- Log level options for `optimizely/episerver` API endpoint requests: `info`, `debug`, `warn`, `error`
 - Support for additional headers
-- Log level options for Optimizely/Episerver API endpoint requests: `info`, `debug`, `warn`, `error`
+- Support for custom request timeout in all `optimizely/episerver` API requests
 
 ## Installation and Setup
 
@@ -118,7 +119,21 @@ Set the log level for the Optimizely/Episerver API API requests. Supports `info`
 options: {
 	// ...
 
-	logLevel: "debug";
+	log_level: "debug";
+}
+```
+
+### Request Timeout
+
+Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
+
+**Default:** `10000`.
+
+```javascript
+options: {
+	// ...
+
+	request_timeout: 10000;
 }
 ```
 
