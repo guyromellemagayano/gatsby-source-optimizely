@@ -2,6 +2,7 @@
 
 import axios from "axios";
 import { OPTIMIZELY_AUTH_ENDPOINT, REQUEST_ACCEPT_HEADER, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
+import { logger } from "./logger";
 
 class Request {
 	constructor(hostname, { username = null, password = null, grant_type = "password", client_id = "default", headers = {}, response_type = "json", log_level = "debug", request_timeout = REQUEST_TIMEOUT } = {}) {
@@ -57,7 +58,11 @@ class Request {
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.response.use(
 			(req) => Promise.resolve(req),
-			(err) => Promise.reject(err)
+			(err) => {
+				logger.error(`[${method.toUpperCase()}] ${this.hostname + path} ${err.response ? err.response.status : err.message}`);
+
+				return Promise.reject(err);
+			}
 		);
 
 		switch (method) {
