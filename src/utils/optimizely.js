@@ -16,6 +16,7 @@ class Optimizely {
 		this.response_type = config.response_type;
 		this.headers = config.headers;
 		this.log_level = config.log_level;
+		this.request_timeout = config.request_timeout;
 	}
 
 	// Handle API requests
@@ -28,8 +29,10 @@ class Optimizely {
 			client_id: this.client_id,
 			headers: this.headers,
 			response_type: this.response_type,
-			log_level: this.log_level
+			log_level: this.log_level,
+			request_timeout: this.request_timeout
 		});
+
 		const { data } = await request.run(method, path, body);
 
 		return data;

@@ -1,5 +1,6 @@
 "use strict";
 
+import { REQUEST_TIMEOUT } from "./constants";
 import { convertObjectToString } from "./utils/convertValues";
 import { logger } from "./utils/logger";
 import Optimizely from "./utils/optimizely";
@@ -84,7 +85,8 @@ exports.pluginOptionsSchema = async ({ Joi }) => {
 			})
 			.description("The endpoints for the Optimizely/Episerver site"),
 		log_level: Joi.string().default("debug").description("The log level to use"),
-		response_type: Joi.string().default("json").description("The response type to use")
+		response_type: Joi.string().default("json").description("The response type to use"),
+		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
 	});
 };
 
@@ -99,7 +101,8 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		auth: { site_url, username, password, grant_type = "password", client_id = "Default", headers = {} },
 		endpoints = null,
 		log_level = "debug",
-		response_type = "json"
+		response_type = "json",
+		request_timeout = REQUEST_TIMEOUT
 	} = pluginOptions;
 
 	// Prepare node sourcing helpers
@@ -117,7 +120,8 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		client_id,
 		response_type,
 		headers,
-		log_level
+		log_level,
+		request_timeout
 	});
 
 	await Promise.allSettled(

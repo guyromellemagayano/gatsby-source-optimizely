@@ -4,7 +4,7 @@ import axios from "axios";
 import { OPTIMIZELY_AUTH_ENDPOINT, REQUEST_ACCEPT_HEADER, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
 
 class Request {
-	constructor(hostname, { username = null, password = null, grant_type = "password", client_id = "default", headers = {}, response_type = "json", log_level = "debug" } = {}) {
+	constructor(hostname, { username = null, password = null, grant_type = "password", client_id = "default", headers = {}, response_type = "json", log_level = "debug", request_timeout = REQUEST_TIMEOUT } = {}) {
 		this.hostname = hostname;
 		this.username = username;
 		this.password = password;
@@ -13,6 +13,7 @@ class Request {
 		this.headers = headers;
 		this.response_type = response_type;
 		this.log_level = log_level;
+		this.request_timeout = request_timeout;
 	}
 
 	// FIXME: Handle authentication request
@@ -40,7 +41,7 @@ class Request {
 			headers: this.headers,
 			responseType: this.response_type,
 			withCredentials: true,
-			timeout: REQUEST_TIMEOUT
+			timeout: this.request_timeout
 		});
 
 		// Override default `axios` instance
