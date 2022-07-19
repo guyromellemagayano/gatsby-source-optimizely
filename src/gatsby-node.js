@@ -125,49 +125,26 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 	});
 
 	await Promise.allSettled(
-		Object.entries(endpoints).map(async ([nodeName, endpoint]) => {
-			logger.warn(`Fetching data in ${nodeName} - ${endpoint}...`);
+		Object.entries(endpoints).map(
+			async ([nodeName, endpoint]) =>
+				await optimizely
+					.get(endpoint)
+					.then((res) => {
+						logger.info(`Success fetching data in ${endpoint}. Preparing data for node creation...`);
 
-			const response = await optimizely
-				.get(endpoint)
-				.then((data) => {
-					logger.info(`Success fetching data in ${nodeName} - ${endpoint}`);
+						// Create node for each item in the response
+						return res && Array.isArray(res) && res.length > 0 ? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers)) : handleCreateNodeFromData(res, nodeName, helpers);
+					})
+					.catch((err) => {
+						logger.error(`An error occurred while fetching Optimizely/Episerver endpoint data: ${err}`);
 
-					return { nodeName, endpoint, data };
-				})
-				.catch((err) => {
-					logger.error(`Error fetching data in ${nodeName} - ${endpoint}: ${err.message}`);
+						return err;
+					})
+					.finally(() => {
+						logger.info("Fetching Optimizely/Episerver endpoint data done successfully");
 
-					throw err;
-				});
-
-			return response;
-		})
-	)
-		.then((results) => {
-			results.forEach((result) => {
-				if (result.status === "fulfilled") {
-					const { nodeName, endpoint, data } = result.value;
-
-					logger.warn(`Preparing data in ${nodeName} - ${endpoint} for node creation...`);
-
-					// Create node for each item in the response
-					return data && Array.isArray(data) && data.length > 0 ? data.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers)) : handleCreateNodeFromData(data, nodeName, helpers);
-				} else {
-					logger.error(`Error fetching data in ${result.value.nodeName} - ${result.value.endpoint}: ${result.reason.message}`);
-
-					return result.reason;
-				}
-			});
-
-			logger.info("Optimizely/Episerver source nodes created successfully");
-		})
-		.catch((err) => {
-			logger.error(`An error occurred while fetching Optimizely/Episerver endpoint data: ${err.message}`);
-
-			return err;
-		})
-		.finally(() => {
-			logger.info("Fetching Optimizely/Episerver endpoint data done successfully");
-		});
+						return true;
+					})
+		)
+	);
 };

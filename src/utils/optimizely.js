@@ -1,5 +1,7 @@
 "use strict";
 
+import sleep from "then-sleep";
+import { logger } from "./logger";
 import Request from "./request";
 
 class Optimizely {
@@ -33,19 +35,30 @@ class Optimizely {
 			request_timeout: this.request_timeout
 		});
 
+		let endpointUrl = new URL(path, this.site_url);
+
+		logger.info(`[${method.toUpperCase()}] ${endpointUrl}`);
+
 		const { data } = await request.run(method, path, body);
 
+		// Return data
 		return data;
 	}
 
 	// Handle `GET` request
 	async get(path) {
-		return await this.request("get", path);
+		await sleep(this.request_timeout);
+
+		const response = await this.request("get", path);
+		return response;
 	}
 
 	// Handle `POST` request
 	async post(path, body) {
-		return await this.request("post", path, body);
+		await sleep(this.request_timeout);
+
+		const response = await this.request("post", path, body);
+		return response;
 	}
 }
 

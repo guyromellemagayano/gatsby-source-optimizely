@@ -52,17 +52,30 @@ class Request {
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.request.use(
 			(req) => Promise.resolve(req),
-			(err) => Promise.reject(err)
+			(err) => {
+				if (err.code === "ETIMEDOUT") {
+					setTimeout(async () => {
+						// Send log message when restarting request
+						logger.warn(`Restarting request...`);
+
+						// Send log message when restarting request
+						logger.info(`[${method.toUpperCase()}] ${this.hostname + path}`);
+
+						// Restart request
+						await this.run(method, path, body)
+							.then((res) => Promise.resolve(res))
+							.catch((err) => Promise.reject(err));
+					}, this.request_timeout);
+				}
+
+				return Promise.reject(err);
+			}
 		);
 
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.response.use(
-			(req) => Promise.resolve(req),
-			(err) => {
-				logger.error(`[${method.toUpperCase()}] ${this.hostname + path} ${err.response ? err.response.status : err.message}`);
-
-				return Promise.reject(err);
-			}
+			(res) => Promise.resolve(res),
+			(err) => Promise.reject(err)
 		);
 
 		switch (method) {
