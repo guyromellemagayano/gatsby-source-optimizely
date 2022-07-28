@@ -1,7 +1,7 @@
 "use strict";
 
 import axios from "axios";
-import { REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
+import { REQUEST_ACCEPT_HEADER, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
 import { logger } from "./logger";
 
 class Request {
@@ -25,6 +25,9 @@ class Request {
 			withCredentials: true,
 			timeout: this.request_timeout
 		});
+
+		// Override default `axios` instance
+		axios.defaults.headers.common["Accept"] = REQUEST_ACCEPT_HEADER;
 
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.request.use(
