@@ -33,6 +33,7 @@ class Optimizely {
 			request_timeout: this.request_timeout
 		});
 
+		// Run request
 		const { data } = await request.run(method, path, body);
 
 		// Return data
