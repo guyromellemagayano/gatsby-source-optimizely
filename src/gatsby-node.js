@@ -1,16 +1,19 @@
 "use strict";
 
-import { REQUEST_TIMEOUT } from "./constants";
+import { REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
 import { convertObjectToString } from "./utils/convertValues";
 import { logger } from "./utils/logger";
 import Optimizely from "./utils/optimizely";
 
 /**
- * ============================================================================
- * Helper functions
- * ============================================================================
+ * @description Create a node from the data
+ * @param {Object} item
+ * @param {string} nodeType
+ * @param {Object} helpers
+ * @param {string} endpoint
+ * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = (item, nodeType, helpers) => {
+const handleCreateNodeFromData = (item, nodeType, helpers, endpoint) => {
 	const nodeMetadata = {
 		...item,
 		id: helpers.createNodeId(`${nodeType}-${item.id || item.name}`),
@@ -26,24 +29,24 @@ const handleCreateNodeFromData = (item, nodeType, helpers) => {
 
 	const node = Object.assign({}, item, nodeMetadata);
 
+	logger.warn(`[CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+
 	helpers.createNode(node);
 
 	return node;
 };
 
 /**
- * ============================================================================
- * Verify plugin loads
- * ============================================================================
+ * @description Init the plugin
  */
 exports.onPreInit = () => {
 	logger.info("@epicdesignlabs/gatsby-source-optimizely plugin loaded successfully");
 };
 
 /**
- * ============================================================================
- * Validate plugin options
- * ============================================================================
+ * @description Validate the plugin options
+ * @param {Object} Joi
+ * @returns {Object} Joi schema
  */
 exports.pluginOptionsSchema = async ({ Joi }) => {
 	return Joi.object({
@@ -81,9 +84,9 @@ exports.pluginOptionsSchema = async ({ Joi }) => {
 		endpoints: Joi.object()
 			.required()
 			.messages({
-				"object.required": "The `endpoints` is required."
+				"object.required": "The `endpoints` object is required."
 			})
-			.description("The endpoints for the Optimizely/Episerver site"),
+			.description("The endpoints to create nodes for"),
 		log_level: Joi.string().default("debug").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
 		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
@@ -91,14 +94,17 @@ exports.pluginOptionsSchema = async ({ Joi }) => {
 };
 
 /**
- * ============================================================================
- * Source and cache nodes from the Optimizely/Episerver API
- * ============================================================================
+ * @description Source and cache nodes from the Optimizely/Episerver API
+ * @param {Object} actions
+ * @param {Object} createNodeId
+ * @param {Object} createContentDigest
+ * @param {Object} pluginOptions
+ * @returns {Promise<void>} Node creation promise
  */
 exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
-		auth: { site_url, username, password, grant_type = "password", client_id = "Default", headers = {} },
+		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default", headers = {} },
 		endpoints = null,
 		log_level = "debug",
 		response_type = "json",
@@ -124,26 +130,25 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		request_timeout
 	});
 
+	// Authenticate with Optimizely
+	// const authPromise = optimizely.checkAccessToken();
+
+	// Get the endpoints from the Optimizely/Episerver site and create nodes
 	await Promise.allSettled(
 		Object.entries(endpoints).map(
 			async ([nodeName, endpoint]) =>
 				await optimizely
 					.get(endpoint)
 					.then((res) => {
-						logger.info(`Success fetching data in ${endpoint}. Preparing data for node creation...`);
-
 						// Create node for each item in the response
-						return res && Array.isArray(res) && res.length > 0 ? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers)) : handleCreateNodeFromData(res, nodeName, helpers);
+						return res && Array.isArray(res) && res.length > 0
+							? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint))
+							: handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint);
 					})
 					.catch((err) => {
-						logger.error(`An error occurred while fetching Optimizely/Episerver endpoint data: ${err}`);
+						logger.error(`An error occurred while fetching ${endpoint} endpoint data: ${err.message}`);
 
 						return err;
-					})
-					.finally(() => {
-						logger.info("Fetching Optimizely/Episerver endpoint data done successfully");
-
-						return true;
 					})
 		)
 	);

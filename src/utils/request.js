@@ -1,42 +1,23 @@
 "use strict";
 
 import axios from "axios";
-import { OPTIMIZELY_AUTH_ENDPOINT, REQUEST_ACCEPT_HEADER, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
+import { REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "../constants";
 import { logger } from "./logger";
 
 class Request {
-	constructor(hostname, { username = null, password = null, grant_type = "password", client_id = "default", headers = {}, response_type = "json", log_level = "debug", request_timeout = REQUEST_TIMEOUT } = {}) {
+	constructor(hostname, { headers = {}, response_type = "json", log_level = "debug", request_timeout = REQUEST_TIMEOUT } = {}) {
 		this.hostname = hostname;
-		this.username = username;
-		this.password = password;
-		this.grant_type = grant_type;
-		this.client_id = client_id;
 		this.headers = headers;
 		this.response_type = response_type;
 		this.log_level = log_level;
 		this.request_timeout = request_timeout;
 	}
 
-	// FIXME: Handle authentication request
-	async authenticate(query) {
-		// Prepare `body` for request execution
-		const body = {
-			username: this.username,
-			password: this.password,
-			grant_type: this.grant_type,
-			client_id: this.client_id,
-			...query
-		};
-
-		// Handle `POST` request
-		const response = await this.post(OPTIMIZELY_AUTH_ENDPOINT, body);
-
-		return response;
-	}
-
 	// Handle running plugin
 	async run(method, path, body) {
-		// Custom `axios` instance
+		const updatedMethod = method.toLowerCase();
+
+		// Custom `request` instance
 		const RequestAxiosInstance = axios.create({
 			baseURL: this.hostname + REQUEST_URL_SLUG,
 			headers: this.headers,
@@ -45,21 +26,19 @@ class Request {
 			timeout: this.request_timeout
 		});
 
-		// Override default `axios` instance
-		axios.defaults.headers.common["Accept"] = REQUEST_ACCEPT_HEADER;
-		axios.defaults.headers.common["Content-Type"] = REQUEST_ACCEPT_HEADER;
-
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.request.use(
+			(config) => {
+				logger.warn(`[${method.toUpperCase()}] ${this.hostname + path}`);
+
+				return config;
+			},
 			(req) => Promise.resolve(req),
 			(err) => {
 				if (err.code === "ETIMEDOUT") {
 					setTimeout(async () => {
 						// Send log message when restarting request
-						logger.warn(`Restarting request...`);
-
-						// Send log message when restarting request
-						logger.info(`[${method.toUpperCase()}] ${this.hostname + path}`);
+						logger.warn(`[${method.toUpperCase()}] ${this.hostname + path} request timed out. Restarting request...`);
 
 						// Restart request
 						await this.run(method, path, body)
@@ -74,21 +53,51 @@ class Request {
 
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.response.use(
-			(res) => Promise.resolve(res),
-			(err) => Promise.reject(err)
+			(config) => {
+				// Send log message when endpoint request is successful
+				logger.info(`[${method.toUpperCase()}] ${this.hostname + path} - ${config.status}`);
+
+				return config;
+			},
+			(res) => {
+				logger.info(`${res?.length || Object.keys(res)?.length} items found.`);
+
+				return Promise.resolve(res);
+			},
+			(err) => {
+				if (err.code === "ETIMEDOUT") {
+					setTimeout(async () => {
+						// Send log message when restarting request
+						logger.warn(`[${method.toUpperCase()}] ${this.hostname + path} request timed out. Restarting request...`);
+
+						// Restart request
+						await this.run(method, path, body)
+							.then((res) => Promise.resolve(res))
+							.catch((err) => Promise.reject(err));
+					}, this.request_timeout);
+				}
+
+				return Promise.reject(err);
+			}
 		);
 
-		switch (method) {
-			case "get":
-				return await RequestAxiosInstance.get(path)
+		switch (updatedMethod) {
+			case "get": {
+				const result = await RequestAxiosInstance.get(path, body)
 					.then((res) => Promise.resolve(res))
 					.catch((err) => Promise.reject(err));
-			case "post":
-				return await RequestAxiosInstance.post(path, body)
+
+				return result;
+			}
+			case "post": {
+				const result = await RequestAxiosInstance.post(path, body)
 					.then((res) => Promise.resolve(res))
 					.catch((err) => Promise.reject(err));
+
+				return result;
+			}
 			default:
-				throw new Error(`The method ${method} is not supported.`);
+				throw new Error(`The ${updatedMethod} method is currently not supported.`);
 		}
 	}
 }
