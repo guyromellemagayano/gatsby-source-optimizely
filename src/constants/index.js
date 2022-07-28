@@ -5,9 +5,6 @@ export const IS_PROD = process.env.NODE_ENV === "production";
 // Request
 export const REQUEST_URL_SLUG = "/api/episerver";
 export const REQUEST_ACCEPT_HEADER = "application/json";
-export const REQUEST_HEADERS = {
-	Accept: REQUEST_ACCEPT_HEADER
-};
 export const REQUEST_TIMEOUT = 0;
 
 // Auth
