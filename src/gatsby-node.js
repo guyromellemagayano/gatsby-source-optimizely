@@ -11,9 +11,10 @@ import Optimizely from "./utils/optimizely";
  * @param {string} nodeType
  * @param {Object} helpers
  * @param {string} endpoint
+ * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = (item, nodeType, helpers, endpoint) => {
+const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
 	const nodeMetadata = {
 		...item,
 		id: helpers.createNodeId(`${nodeType}-${item.id || item.name}`),
@@ -29,18 +30,18 @@ const handleCreateNodeFromData = (item, nodeType, helpers, endpoint) => {
 
 	const node = Object.assign({}, item, nodeMetadata);
 
-	logger.warn(`[CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+	helpers
+		.createNode(node)
+		.then(() => {
+			log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
 
-	helpers.createNode(node);
+			return node;
+		})
+		.catch((err) => {
+			log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
 
-	return node;
-};
-
-/**
- * @description Init the plugin
- */
-exports.onPreInit = () => {
-	logger.info("@epicdesignlabs/gatsby-source-optimizely plugin loaded successfully");
+			throw err;
+		});
 };
 
 /**
@@ -48,8 +49,8 @@ exports.onPreInit = () => {
  * @param {Object} Joi
  * @returns {Object} Joi schema
  */
-exports.pluginOptionsSchema = async ({ Joi }) => {
-	return Joi.object({
+exports.pluginOptionsSchema = ({ Joi }) =>
+	Joi.object({
 		auth: Joi.object({
 			site_url: Joi.string()
 				.required()
@@ -91,7 +92,6 @@ exports.pluginOptionsSchema = async ({ Joi }) => {
 		response_type: Joi.string().default("json").description("The response type to use"),
 		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
 	});
-};
 
 /**
  * @description Source and cache nodes from the Optimizely/Episerver API
@@ -111,6 +111,9 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		request_timeout = REQUEST_TIMEOUT
 	} = pluginOptions;
 
+	// Custom logger based on the `log_level` plugin option
+	const log = logger(log_level);
+
 	// Prepare node sourcing helpers
 	const helpers = Object.assign({}, actions, {
 		createContentDigest,
@@ -126,7 +129,7 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		client_id,
 		response_type,
 		headers,
-		log_level,
+		log,
 		request_timeout
 	});
 
@@ -142,11 +145,11 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 					.then((res) => {
 						// Create node for each item in the response
 						return res && Array.isArray(res) && res.length > 0
-							? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint))
-							: handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint);
+							? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log))
+							: handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
 					})
 					.catch((err) => {
-						logger.error(`An error occurred while fetching ${endpoint} endpoint data: ${err.message}`);
+						log.error(`An error occurred while fetching ${endpoint} endpoint data: ${err.message}`);
 
 						return err;
 					})

@@ -3,7 +3,6 @@
 import qs from "qs";
 import sleep from "then-sleep";
 import { AUTH_REQUEST_CONTENT_TYPE_HEADER, OPTIMIZELY_AUTH_ENDPOINT } from "../constants";
-import { logger } from "./logger";
 import Request from "./request";
 
 class Optimizely {
@@ -19,7 +18,7 @@ class Optimizely {
 		this.client_id = config.client_id;
 		this.response_type = config.response_type;
 		this.headers = config.headers;
-		this.log_level = config.log_level;
+		this.log = config.log;
 		this.request_timeout = config.request_timeout;
 	}
 
@@ -29,7 +28,7 @@ class Optimizely {
 		const request = new Request(this.site_url, {
 			headers: this.headers,
 			response_type: this.response_type,
-			log_level: this.log_level,
+			log: this.log,
 			request_timeout: this.request_timeout
 		});
 
@@ -42,7 +41,7 @@ class Optimizely {
 
 	// Authorization token request
 	async checkAccessToken() {
-		logger.warn("Authenticating with Optimizely... (this may take a few seconds)");
+		this.log.warn("Authenticating with Optimizely... (this may take a few seconds)");
 
 		await sleep(this.request_timeout);
 
