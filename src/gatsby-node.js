@@ -1,20 +1,20 @@
 "use strict";
 
-import { REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
+import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, AUTH_REQUEST_CONTENT_TYPE_HEADER, CORS_ORIGIN, OPTIMIZELY_AUTH_ENDPOINT, REQUEST_ACCEPT_HEADER, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
 import { convertObjectToString } from "./utils/convertValues";
 import { logger } from "./utils/logger";
 import Optimizely from "./utils/optimizely";
+import qs from "qs";
+import axios from "axios";
 
 /**
  * @description Create a node from the data
  * @param {Object} item
  * @param {string} nodeType
  * @param {Object} helpers
- * @param {string} endpoint
- * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
+const handleCreateNodeFromData = (item, nodeType, helpers) => {
 	const nodeMetadata = {
 		...item,
 		id: helpers.createNodeId(`${nodeType}-${item.id || item.name}`),
@@ -33,12 +33,12 @@ const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
 	helpers
 		.createNode(node)
 		.then(() => {
-			log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+			//		log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
 
 			return node;
 		})
 		.catch((err) => {
-			log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
+			//	log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
 
 			throw err;
 		});
@@ -104,7 +104,7 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
-		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default", headers = {} },
+		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default" },
 		endpoints = null,
 		log_level = "debug",
 		response_type = "json",
@@ -119,6 +119,34 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		createContentDigest,
 		createNodeId
 	});
+
+	var config = {
+		method: "post",
+		url: site_url + REQUEST_URL_SLUG + OPTIMIZELY_AUTH_ENDPOINT,
+		headers: {
+			"Accept": REQUEST_ACCEPT_HEADER,
+			"Content-Type": AUTH_REQUEST_CONTENT_TYPE_HEADER
+		},
+		data: qs.stringify({
+			password: password,
+			username: username,
+			grant_type: grant_type,
+			client_id: client_id
+		})
+	};
+
+	const { data } = await axios(config);
+
+	const headers = {
+		"Authorization": `Bearer ${data.access_token}`,
+		"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
+		"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
+		"Access-Control-Allow-Origin": CORS_ORIGIN
+	};
+
+	console.log("------------");
+	console.log(`Bearer ${data.access_token}`);
+	console.log("------------");
 
 	// Create a new Optimizely instance
 	const optimizely = new Optimizely({
@@ -145,8 +173,8 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 					.then((res) => {
 						// Create node for each item in the response
 						return res && Array.isArray(res) && res.length > 0
-							? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log))
-							: handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
+							? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers))
+							: handleCreateNodeFromData(res, nodeName, helpers);
 					})
 					.catch((err) => {
 						log.error(`An error occurred while fetching ${endpoint} endpoint data: ${err.message}`);
