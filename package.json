@@ -1,12 +1,12 @@
 {
 	"name": "@epicdesignlabs/gatsby-source-optimizely",
-	"version": "2.1.1",
+	"version": "2.1.2",
 	"description": "This unofficial source plugin makes Optimizely API data available in GatsbyJS sites. Currently in active development.",
 	"scripts": {
 		"build": "babel ./src/ --out-dir ./ --source-maps",
 		"watch": "babel ./src/ --out-dir ./ --source-maps --watch",
-		"lint:eslint": "eslint './src/**/*.js' --quiet --fix --color --ignore-path .gitignore",
-		"lint:prettier": "prettier './src/**/*.js' --write --ignore-path .gitignore",
+		"lint:eslint": "eslint \"./src/**/*.js\" --quiet --fix --color --ignore-path .gitignore",
+		"lint:prettier": "prettier \"./src/**/*.js\" --write --ignore-path .gitignore",
 		"lint": "npm run lint:eslint && npm run lint:prettier",
 		"test": "npm run lint",
 		"prepare": "cross-env NODE_ENV=production npm run build",

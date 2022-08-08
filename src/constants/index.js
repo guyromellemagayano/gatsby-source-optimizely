@@ -12,3 +12,7 @@ export const AUTH_REQUEST_CONTENT_TYPE_HEADER = "application/x-www-form-urlencod
 
 // Optimizely
 export const OPTIMIZELY_AUTH_ENDPOINT = "/auth/token";
+
+export const ACCESS_CONTROL_ALLOW_HEADERS = "Content-Type,Accept";
+export const ACCESS_CONTROL_ALLOW_CREDENTIALS = true;
+export const CORS_ORIGIN = "*";
