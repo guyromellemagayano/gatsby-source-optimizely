@@ -1,15 +1,7 @@
 {
 	"root": true,
-	"extends": [
-		"eslint:recommended",
-		"prettier",
-		"plugin:prettier/recommended"
-	],
-	"plugins": [
-		"react",
-		"babel",
-		"prettier"
-	],
+	"extends": ["eslint:recommended", "prettier", "plugin:prettier/recommended"],
+	"plugins": ["react", "babel", "prettier"],
 	"env": {
 		"node": true,
 		"es2021": true
