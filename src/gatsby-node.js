@@ -11,6 +11,8 @@ import Optimizely from "./utils/optimizely";
  * @param {Object} item
  * @param {string} nodeType
  * @param {Object} helpers
+ * @param {string} endpoint
+ * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
 const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
