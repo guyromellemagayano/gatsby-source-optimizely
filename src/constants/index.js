@@ -9,10 +9,9 @@ export const REQUEST_TIMEOUT = 0;
 
 // Auth
 export const AUTH_REQUEST_CONTENT_TYPE_HEADER = "application/x-www-form-urlencoded";
+export const AUTH_ENDPOINT = "/auth/token";
 
-// Optimizely
-export const OPTIMIZELY_AUTH_ENDPOINT = "/auth/token";
-
+// Headers
 export const ACCESS_CONTROL_ALLOW_HEADERS = "Content-Type,Accept";
 export const ACCESS_CONTROL_ALLOW_CREDENTIALS = true;
 export const CORS_ORIGIN = "*";
