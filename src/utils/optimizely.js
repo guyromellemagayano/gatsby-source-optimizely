@@ -1,8 +1,6 @@
 "use strict";
 
-import qs from "qs";
 import sleep from "then-sleep";
-import { AUTH_REQUEST_CONTENT_TYPE_HEADER, OPTIMIZELY_AUTH_ENDPOINT } from "../constants";
 import Request from "./request";
 
 class Optimizely {
@@ -12,10 +10,6 @@ class Optimizely {
 		}
 
 		this.site_url = config.site_url;
-		this.username = config.username;
-		this.password = config.password;
-		this.grant_type = config.grant_type;
-		this.client_id = config.client_id;
 		this.response_type = config.response_type;
 		this.headers = config.headers;
 		this.log = config.log;
@@ -23,10 +17,12 @@ class Optimizely {
 	}
 
 	// Handle API requests
-	async request(method, path, body = null) {
+	async request(method, path, body = null, headers = {}) {
+		await sleep(this.request_timeout);
+
 		// Prepare `path` for request execution
 		const request = new Request(this.site_url, {
-			headers: this.headers,
+			headers: Object.assign({}, this.headers, headers),
 			response_type: this.response_type,
 			log: this.log,
 			request_timeout: this.request_timeout
@@ -39,39 +35,19 @@ class Optimizely {
 		return data;
 	}
 
-	// Authorization token request
-	async checkAccessToken() {
-		this.log.warn("Authenticating with Optimizely... (this may take a few seconds)");
-
-		await sleep(this.request_timeout);
-
-		const body = qs.stringify({
-			username: this.username,
-			password: this.password,
-			grant_type: this.grant_type,
-			client_id: this.client_id
-		});
-
-		// Send authentication request
-		const response = await this.request("post", OPTIMIZELY_AUTH_ENDPOINT, body, {
-			"Content-Type": AUTH_REQUEST_CONTENT_TYPE_HEADER
-		});
-		return response;
-	}
-
 	// Handle `GET` request
-	async get(path) {
+	async get(path, headers = {}) {
 		await sleep(this.request_timeout);
 
-		const response = await this.request("get", path);
+		const response = await this.request("get", path, headers);
 		return response;
 	}
 
 	// Handle `POST` request
-	async post(path, body) {
+	async post(path, body, headers = {}) {
 		await sleep(this.request_timeout);
 
-		const response = await this.request("post", path, body);
+		const response = await this.request("post", path, body, headers);
 		return response;
 	}
 }
