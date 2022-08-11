@@ -89,7 +89,7 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 				"object.required": "The `endpoints` object is required."
 			})
 			.description("The endpoints to create nodes for"),
-		log_level: Joi.string().default("debug").description("The log level to use"),
+		log_level: Joi.string().default("info").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
 		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
 	});
@@ -126,7 +126,8 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 
 	const authData = await auth.login();
 
-	console.log(authData);
+	// Display the auth data
+	log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);
 
 	// Create a new Optimizely instance
 	const optimizely = new Optimizely({
@@ -160,5 +161,9 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 						return err;
 					})
 		)
-	);
+	).finally(() => {
+		log.info("@epicdesignlabs/gatsby-source-bigcommerce task processing complete!");
+
+		return;
+	});
 };
