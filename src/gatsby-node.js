@@ -162,7 +162,7 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 					})
 		)
 	).finally(() => {
-		log.info("@epicdesignlabs/gatsby-source-bigcommerce task processing complete!");
+		log.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
 
 		return;
 	});
