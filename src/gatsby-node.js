@@ -124,7 +124,7 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 	// Authenticate with the Optimizely/Episerver
 	const auth = new Auth({ site_url, username, password, grant_type, client_id, log, response_type, request_timeout });
 
-	const authData = await auth.login();
+	const authData = await auth.post();
 
 	// Display the auth data
 	log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);

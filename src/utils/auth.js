@@ -18,7 +18,7 @@ class Auth {
 		this.request_timeout = config.request_timeout;
 	}
 
-	async login() {
+	async post() {
 		let config = {
 			method: "post",
 			url: this.site_url + REQUEST_URL_SLUG + AUTH_ENDPOINT,
@@ -26,12 +26,15 @@ class Auth {
 				"Accept": REQUEST_ACCEPT_HEADER,
 				"Content-Type": AUTH_REQUEST_CONTENT_TYPE_HEADER
 			},
-			data: qs.stringify({
-				password: this.password,
-				username: this.username,
-				grant_type: this.grant_type,
-				client_id: this.client_id
-			})
+			data: qs.stringify(
+				{
+					password: this.password,
+					username: this.username,
+					grant_type: this.grant_type,
+					client_id: this.client_id
+				},
+				{ encode: false }
+			)
 		};
 
 		const { data } = await axios(config);

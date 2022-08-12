@@ -22,7 +22,7 @@ class Optimizely {
 
 		// Prepare `path` for request execution
 		const request = new Request(this.site_url, {
-			headers: Object.assign(this.headers, headers),
+			headers: Object.assign({}, this.headers, headers),
 			response_type: this.response_type,
 			log: this.log,
 			request_timeout: this.request_timeout
