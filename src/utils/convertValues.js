@@ -87,7 +87,7 @@ export const convertStringToObject = (e) => (typeof e === "string" ? JSON.parse(
  * @param {object} e
  * @returns {string} String
  */
-export const convertObjectToString = (e) => (typeof e === "object" ? JSON.stringify(e) : e);
+export const convertObjectToString = (e) => (typeof e === "object" ? JSON.stringify(e, null, 2) : e);
 
 /**
  * @description Convert number to string
