@@ -135,7 +135,9 @@ class Optimizely {
 						temp.contentLink?.expanded?.items && Array.isArray(temp.contentLink?.expanded?.items) && temp.contentLink?.expanded?.items?.length > 0 ? await handleExpandedKeyValues(temp.contentLink?.expanded?.items, "items") : null;
 					const imagesPromise =
 						temp.contentLink?.expanded?.images && Array.isArray(temp.contentLink?.expanded?.images) && temp.contentLink?.expanded?.images?.length > 0 ? await handleExpandedKeyValues(block.contentLink.expanded.images, "images") : null;
-					const expandedKeyValuesPromises = [dynamicStylesPromise, itemsPromise, imagesPromise] || [];
+					const formPromise =
+						temp.contentLink?.expanded?.form && Array.isArray(temp.contentLink?.expanded?.form) && temp.contentLink?.expanded?.form?.length > 0 ? await handleExpandedKeyValues(temp.contentLink?.expanded?.form, "form") : null;
+					const expandedKeyValuesPromises = [dynamicStylesPromise, itemsPromise, imagesPromise, formPromise] || [];
 					await Promise.allSettled(expandedKeyValuesPromises)
 						.then((res) => {
 							if (res && Array.isArray(res) && res?.length > 0) {
@@ -151,6 +153,9 @@ class Optimizely {
 												break;
 											case 2:
 												temp.contentLink.expanded.images = value;
+												break;
+											case 3:
+												temp.contentLink.expanded.form = value;
 												break;
 											default:
 												break;
