@@ -18,8 +18,7 @@ import Optimizely from "./utils/optimizely";
 const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
 	const nodeMetadata = {
 		...item,
-		id: helpers.createNodeId(`${nodeType}-${item.id || item.name}`),
-		optimizely_id: item.id,
+		id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
 		parent: null,
 		children: [],
 		internal: {
@@ -91,8 +90,15 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 			.description("The endpoints to create nodes for"),
 		log_level: Joi.string().default("info").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
-		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
+		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds"),
+		enable_cache: Joi.boolean().default(true).description("Whether to enable the cache or not")
 	});
+
+/**
+ * @description Verify if plugin loaded correctly
+ * @returns {void}
+ */
+exports.onPreInit = () => console.info("@epicdesignlabs/gatsby-source-optimizely loaded successfully!");
 
 /**
  * @description Source and cache nodes from the Optimizely/Episerver API
@@ -102,14 +108,15 @@ exports.pluginOptionsSchema = ({ Joi }) =>
  * @param {Object} pluginOptions
  * @returns {Promise<void>} Node creation promise
  */
-exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, pluginOptions) => {
+exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
 		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default", headers = {} },
 		endpoints = null,
 		log_level = "info",
 		response_type = "json",
-		request_timeout = REQUEST_TIMEOUT
+		request_timeout = REQUEST_TIMEOUT,
+		enable_cache = true
 	} = pluginOptions;
 
 	// Custom logger based on the `log_level` plugin option
@@ -121,49 +128,74 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 		createNodeId
 	});
 
-	// Authenticate with the Optimizely/Episerver
-	const auth = new Auth({ site_url, username, password, grant_type, client_id, log, response_type, request_timeout });
+	// Store the response from the Optimizely/Episerver API in the cache
+	const cacheKey = "gatsby-source-optimizely-api-data-key";
+	let sourceData = await cache.get(cacheKey);
 
-	const authData = await auth.post();
+	// Fetch fresh data if nothing is found in the cache or a plugin option has changed
+	if (!sourceData || !enable_cache) {
+		// Authenticate with the Optimizely/Episerver
+		const auth = new Auth({ site_url, username, password, grant_type, client_id, log, response_type, request_timeout });
 
-	// Display the auth data
-	log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);
+		const authData = await auth.post();
 
-	// Create a new Optimizely instance
-	const optimizely = new Optimizely({
-		site_url,
-		response_type,
-		headers: Object.assign(headers, {
-			"Authorization": `Bearer ${authData.access_token}`,
-			"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
-			"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
-			"Access-Control-Allow-Origin": CORS_ORIGIN
-		}),
-		log,
-		request_timeout
-	});
+		log.warn("Cache is disabled or empty. Fetching fresh data from the Optimizely/Episerver API...");
 
-	// Get the endpoints from the Optimizely/Episerver site and create nodes
-	await Promise.allSettled(
-		Object.entries(endpoints).map(
-			async ([nodeName, endpoint]) =>
-				await optimizely
-					.get(endpoint)
-					.then((res) => {
-						// Create node for each item in the response
-						return res && Array.isArray(res) && res.length > 0
-							? res.map((datum) => handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log))
-							: handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
-					})
-					.catch((err) => {
-						log.error(`An error occurred while fetching ${endpoint} endpoint data: ${err.message}`);
+		// Display the auth data
+		log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);
 
-						return err;
-					})
+		// Create a new Optimizely instance
+		const optimizely = new Optimizely({
+			site_url,
+			response_type,
+			headers: Object.assign(headers, {
+				"Authorization": `Bearer ${authData.access_token}`,
+				"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
+				"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
+				"Access-Control-Allow-Origin": CORS_ORIGIN
+			}),
+			log,
+			request_timeout
+		});
+
+		// Get the endpoints from the Optimizely/Episerver site and create nodes
+		await Promise.allSettled(
+			Object.entries(endpoints).map(
+				async ([nodeName, endpoint]) =>
+					await optimizely
+						.get(endpoint)
+						.then((res) => [res, nodeName, endpoint])
+						.catch((err) => {
+							log.error(`An error occurred while fetching ${endpoint} endpoint data`, err.message);
+
+							throw err;
+						})
+			)
 		)
-	).finally(() => {
-		log.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
+			.then(async (res) => {
+				const data = await cache.set(cacheKey, res);
 
-		return;
-	});
+				sourceData = data;
+
+				return sourceData;
+			})
+			.catch((err) => {
+				log.error("An error occurred while fetching data from the Optimizely/Episerver API", err.message);
+
+				throw err;
+			});
+	}
+
+	// Create nodes from the response data
+	sourceData.forEach(({ status, value }) =>
+		status === "fulfilled"
+			? value[0] && Array.isArray(value[0]) && value[0]?.length > 0
+				? value[0].map((datum) => handleCreateNodeFromData(datum, value[1], helpers, site_url + REQUEST_URL_SLUG + value[2], log))
+				: handleCreateNodeFromData(value[0], value[1], helpers, site_url + REQUEST_URL_SLUG + value[2], log)
+			: null
+	);
+
+	log.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
+
+	return;
 };
