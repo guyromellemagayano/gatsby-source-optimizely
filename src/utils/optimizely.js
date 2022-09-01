@@ -241,8 +241,6 @@ class Optimizely {
 				temp.contentBlocksBottom = expandedContentBlocksBottom;
 			}
 
-			console.log("temp", JSON.stringify(temp, null, 2));
-
 			return temp;
 		} else return data;
 	}
