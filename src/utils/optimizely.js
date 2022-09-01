@@ -218,29 +218,33 @@ class Optimizely {
 				.catch((err) => Promise.reject(err));
 
 			return expandedData;
-		} else {
-			const { contentBlocks, contentBlocksTop, contentBlocksBottom } = data;
+		} else if (data && typeof data === "object" && Object.keys(data).length > 0) {
+			const temp = Object.assign({}, data);
+
+			const { contentBlocks, contentBlocksTop, contentBlocksBottom } = temp;
 
 			if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
-				let expandedContentBlocks = await handleContentBlocks(data.contentBlocks);
+				let expandedContentBlocks = await handleContentBlocks(contentBlocks);
 
-				data.contentBlocks = expandedContentBlocks;
+				temp.contentBlocks = expandedContentBlocks;
 			}
 
 			if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
-				let expandedContentBlocksTop = await handleContentBlocks(data.contentBlocksTop);
+				let expandedContentBlocksTop = await handleContentBlocks(contentBlocksTop);
 
-				data.contentBlocksTop = expandedContentBlocksTop;
+				temp.contentBlocksTop = expandedContentBlocksTop;
 			}
 
 			if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
-				let expandedContentBlocksBottom = await handleContentBlocks(data.contentBlocksBottom);
+				let expandedContentBlocksBottom = await handleContentBlocks(contentBlocksBottom);
 
-				data.contentBlocksBottom = expandedContentBlocksBottom;
+				temp.contentBlocksBottom = expandedContentBlocksBottom;
 			}
 
-			return data;
-		}
+			console.log("temp", JSON.stringify(temp, null, 2));
+
+			return temp;
+		} else return data;
 	}
 
 	// Handle `GET` request
