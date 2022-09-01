@@ -313,7 +313,3 @@ This source code is licensed under the **MIT** license found in the [LICENSE](LI
 ## Author
 
 [**Epic Design Labs**](https://epicdesignlabs.com)
-
-## License
-
-Released under the [MIT license](LICENSE).
