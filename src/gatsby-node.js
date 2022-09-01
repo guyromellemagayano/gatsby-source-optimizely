@@ -116,7 +116,7 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 		log_level = "info",
 		response_type = "json",
 		request_timeout = REQUEST_TIMEOUT,
-		enable_cache = true
+		enable_cache = false
 	} = pluginOptions;
 
 	// Custom logger based on the `log_level` plugin option

@@ -129,13 +129,13 @@ options: {
 
 Enable caching of the Optimizely/Episerver API requests on subsequent source plugin runs. Supports `true`, `false`.
 
-**Default:** `true`.
+**Default:** `false`.
 
 ```javascript
 options: {
 	// ...
 
-	enable_cache: true;
+	enable_cache: false;
 }
 ```
 
