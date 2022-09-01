@@ -15,3 +15,6 @@ export const AUTH_ENDPOINT = "/auth/token";
 export const ACCESS_CONTROL_ALLOW_HEADERS = "Content-Type,Accept";
 export const ACCESS_CONTROL_ALLOW_CREDENTIALS = true;
 export const CORS_ORIGIN = "*";
+
+// Endpoints
+export const CONTENT_ENDPOINT = "/v2.0/content/";

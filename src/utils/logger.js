@@ -7,16 +7,20 @@ import { addColors, createLogger, format, transports } from "winston";
  */
 const logLevels = {
 	levels: {
-		info: 1,
-		warn: 2,
-		error: 3,
-		debug: 4
+		error: 0,
+		warn: 1,
+		info: 2,
+		verbose: 3,
+		debug: 4,
+		silly: 5
 	},
 	colors: {
-		info: "bold green",
-		warn: "bold yellow",
 		error: "bold red",
-		debug: "bold cyan"
+		warn: "bold yellow",
+		info: "bold green",
+		verbose: "bold blue",
+		debug: "bold cyan",
+		silly: "bold magenta"
 	}
 };
 
