@@ -16,32 +16,36 @@ import Optimizely from "./utils/optimizely";
  * @returns {Promise<void>} Node creation promise
  */
 const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
-	const nodeMetadata = {
-		...item,
-		id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
-		parent: null,
-		children: [],
-		internal: {
-			type: nodeType,
-			content: convertObjectToString(item),
-			contentDigest: helpers.createContentDigest(item)
-		}
-	};
+	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0) {
+		const nodeMetadata = {
+			...item,
+			id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
+			parent: null,
+			children: [],
+			internal: {
+				type: nodeType,
+				content: convertObjectToString(item),
+				contentDigest: helpers.createContentDigest(item)
+			}
+		};
 
-	const node = Object.assign({}, item, nodeMetadata);
+		const node = Object.assign({}, item, nodeMetadata);
 
-	helpers
-		.createNode(node)
-		.then(() => {
-			log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+		helpers
+			.createNode(node)
+			.then(() => {
+				log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
 
-			return node;
-		})
-		.catch((err) => {
-			log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
+				return node;
+			})
+			.catch((err) => {
+				log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
 
-			throw err;
-		});
+				throw err;
+			});
+	}
+
+	return Promise.resolve();
 };
 
 /**

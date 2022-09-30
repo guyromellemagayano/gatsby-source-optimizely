@@ -122,7 +122,7 @@ class Optimizely {
 					const formPromise =
 						temp.contentLink?.expanded?.form && Array.isArray(temp.contentLink?.expanded?.form) && temp.contentLink?.expanded?.form?.length > 0 ? await handleExpandedKeyValues(temp.contentLink?.expanded?.form, "form") : null;
 
-					const expandedKeyValuesPromises = [dynamicStylesPromise, itemsPromise, imagesPromise, formPromise] || [];
+					const expandedKeyValuesPromises = [dynamicStylesPromise, itemsPromise, imagesPromise, formPromise];
 
 					await Promise.allSettled(expandedKeyValuesPromises)
 						.then((res) => {
@@ -222,7 +222,7 @@ class Optimizely {
 				const expandedDataPromise = new Promise((resolve, reject) => {
 					const temp = Object.assign({}, data);
 
-					const { contentBlocks, contentBlocksTop, contentBlocksBottom } = temp;
+					const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = temp;
 
 					if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
 						let expandedContentBlocks = handleContentBlocks(contentBlocks);
