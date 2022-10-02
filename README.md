@@ -21,8 +21,6 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 - Log level options for `optimizely/episerver` API endpoint requests: `info`, `debug`, `warn`, `error`
 - Support for additional headers
 - Support for custom request timeout in all `optimizely/episerver` API requests
-- **[BETA]** Support for data caching on subsequent source plugin runs
-- **[BETA]** Add support for `expanded` data on content blocks such as `images`, `dynamicStyles`, `items`
 
 ## Installation and Setup
 
@@ -122,20 +120,6 @@ options: {
 	// ...
 
 	log_level: "info";
-}
-```
-
-### [BETA] Caching
-
-Enable caching of the Optimizely/Episerver API requests on subsequent source plugin runs. Supports `true`, `false`.
-
-**Default:** `false`.
-
-```javascript
-options: {
-	// ...
-
-	enable_cache: false;
 }
 ```
 

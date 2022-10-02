@@ -16,37 +16,30 @@ import Optimizely from "./utils/optimizely";
  * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
-	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0) {
-		const nodeMetadata = {
-			...item,
-			id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
-			parent: null,
-			children: [],
-			internal: {
-				type: nodeType,
-				content: convertObjectToString(item),
-				contentDigest: helpers.createContentDigest(item)
-			}
-		};
+const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, log) => {
+	const nodeMetadata = {
+		...item,
+		id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
+		parent: null,
+		children: [],
+		internal: {
+			type: nodeType,
+			content: convertObjectToString(item),
+			contentDigest: helpers.createContentDigest(item)
+		}
+	};
 
-		const node = Object.assign({}, item, nodeMetadata);
+	const node = Object.assign({}, item, nodeMetadata);
 
-		helpers
-			.createNode(node)
-			.then(() => {
-				log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+	try {
+		await helpers.createNode(node);
 
-				return node;
-			})
-			.catch((err) => {
-				log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
+		log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
 
-				throw err;
-			});
+		return node;
+	} catch (error) {
+		log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, error.message);
 	}
-
-	return Promise.resolve();
 };
 
 /**
@@ -95,8 +88,7 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 			.description("The endpoints to create nodes for"),
 		log_level: Joi.string().default("info").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
-		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds"),
-		enable_cache: Joi.boolean().default(true).description("Whether to enable the cache or not")
+		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
 	});
 
 /**
@@ -106,7 +98,7 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 exports.onPreInit = () => console.info("@epicdesignlabs/gatsby-source-optimizely loaded successfully!");
 
 /**
- * @description Source and cache nodes from the Optimizely/Episerver API
+ * @description Source nodes from the Optimizely/Episerver API
  * @param {Object} actions
  * @param {Object} createNodeId
  * @param {Object} createContentDigest
@@ -137,8 +129,6 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 
 	const authData = await auth.post();
 
-	log.warn("Cache is disabled or empty. Fetching fresh data from the Optimizely/Episerver API...");
-
 	// Display the auth data
 	log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);
 
@@ -157,8 +147,6 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 	});
 
 	for (const [nodeName, endpoint] of Object.entries(endpoints)) {
-		console.log("------------------------");
-		console.log(nodeName);
 		try {
 			const res = await optimizely.get(endpoint);
 			if (res && Array.isArray(res) && res?.length > 0) {
@@ -171,7 +159,6 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 				await handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
 			}
 		} catch (error) {
-			console.log(error);
 			log.error(`An error occurred while fetching ${endpoint} endpoint data`, error.message);
 		}
 	}
