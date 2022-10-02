@@ -1,3 +1,4 @@
+/* eslint-disable prettier/prettier */
 "use strict";
 
 import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, CORS_ORIGIN, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
@@ -15,37 +16,30 @@ import Optimizely from "./utils/optimizely";
  * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
-	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0) {
-		const nodeMetadata = {
-			...item,
-			id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
-			parent: null,
-			children: [],
-			internal: {
-				type: nodeType,
-				content: convertObjectToString(item),
-				contentDigest: helpers.createContentDigest(item)
-			}
-		};
+const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, log) => {
+	const nodeMetadata = {
+		...item,
+		id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
+		parent: null,
+		children: [],
+		internal: {
+			type: nodeType,
+			content: convertObjectToString(item),
+			contentDigest: helpers.createContentDigest(item)
+		}
+	};
 
-		const node = Object.assign({}, item, nodeMetadata);
+	const node = Object.assign({}, item, nodeMetadata);
 
-		helpers
-			.createNode(node)
-			.then(() => {
-				log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+	try {
+		await helpers.createNode(node);
 
-				return node;
-			})
-			.catch((err) => {
-				log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
+		log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
 
-				throw err;
-			});
+		return node;
+	} catch (error) {
+		log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, error.message);
 	}
-
-	return Promise.resolve();
 };
 
 /**
@@ -94,8 +88,7 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 			.description("The endpoints to create nodes for"),
 		log_level: Joi.string().default("info").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
-		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds"),
-		enable_cache: Joi.boolean().default(true).description("Whether to enable the cache or not")
+		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
 	});
 
 /**
@@ -105,22 +98,21 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 exports.onPreInit = () => console.info("@epicdesignlabs/gatsby-source-optimizely loaded successfully!");
 
 /**
- * @description Source and cache nodes from the Optimizely/Episerver API
+ * @description Source nodes from the Optimizely/Episerver API
  * @param {Object} actions
  * @param {Object} createNodeId
  * @param {Object} createContentDigest
  * @param {Object} pluginOptions
  * @returns {Promise<void>} Node creation promise
  */
-exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest }, pluginOptions) => {
+exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
 		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default", headers = {} },
 		endpoints = null,
 		log_level = "info",
 		response_type = "json",
-		request_timeout = REQUEST_TIMEOUT,
-		enable_cache = false
+		request_timeout = REQUEST_TIMEOUT
 	} = pluginOptions;
 
 	// Custom logger based on the `log_level` plugin option
@@ -132,72 +124,44 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 		createNodeId
 	});
 
-	// Store the response from the Optimizely/Episerver API in the cache
-	const cacheKey = "gatsby-source-optimizely-api-data-key";
-	let sourceData = await cache.get(cacheKey);
+	// Authenticate with the Optimizely/Episerver
+	const auth = new Auth({ site_url, username, password, grant_type, client_id, log, response_type, request_timeout });
 
-	// Fetch fresh data if nothing is found in the cache or a plugin option has changed
-	if (!sourceData || !enable_cache) {
-		// Authenticate with the Optimizely/Episerver
-		const auth = new Auth({ site_url, username, password, grant_type, client_id, log, response_type, request_timeout });
+	const authData = await auth.post();
 
-		const authData = await auth.post();
+	// Display the auth data
+	log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);
 
-		log.warn("Cache is disabled or empty. Fetching fresh data from the Optimizely/Episerver API...");
+	// Create a new Optimizely instance
+	const optimizely = new Optimizely({
+		site_url,
+		response_type,
+		headers: Object.assign(headers, {
+			"Authorization": `Bearer ${authData.access_token}`,
+			"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
+			"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
+			"Access-Control-Allow-Origin": CORS_ORIGIN
+		}),
+		log,
+		request_timeout
+	});
 
-		// Display the auth data
-		log.info(`(OK) [AUTH] ${convertObjectToString(authData)}`);
-
-		// Create a new Optimizely instance
-		const optimizely = new Optimizely({
-			site_url,
-			response_type,
-			headers: Object.assign(headers, {
-				"Authorization": `Bearer ${authData.access_token}`,
-				"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
-				"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
-				"Access-Control-Allow-Origin": CORS_ORIGIN
-			}),
-			log,
-			request_timeout
-		});
-
-		// Get the endpoints from the Optimizely/Episerver site and create nodes
-		await Promise.allSettled(
-			Object.entries(endpoints).map(
-				async ([nodeName, endpoint]) =>
-					await optimizely
-						.get(endpoint)
-						.then((res) => [res, nodeName, endpoint])
-						.catch((err) => {
-							log.error(`An error occurred while fetching ${endpoint} endpoint data`, err.message);
-
-							throw err;
-						})
-			)
-		)
-			.then(async (res) => {
-				const data = await cache.set(cacheKey, res);
-
-				sourceData = data;
-
-				return sourceData;
-			})
-			.catch((err) => {
-				log.error("An error occurred while fetching data from the Optimizely/Episerver API", err.message);
-
-				throw err;
-			});
+	for (const [nodeName, endpoint] of Object.entries(endpoints)) {
+		try {
+			const res = await optimizely.get(endpoint);
+			if (res && Array.isArray(res) && res?.length > 0) {
+				await Promise.allSettled(
+					res.map(async (datum) => {
+						await handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
+					})
+				);
+			} else {
+				await handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
+			}
+		} catch (error) {
+			log.error(`An error occurred while fetching ${endpoint} endpoint data`, error.message);
+		}
 	}
-
-	// Create nodes from the response data
-	sourceData.forEach(({ status, value }) =>
-		status === "fulfilled"
-			? value[0] && Array.isArray(value[0]) && value[0]?.length > 0
-				? value[0].map((datum) => handleCreateNodeFromData(datum, value[1], helpers, site_url + REQUEST_URL_SLUG + value[2], log))
-				: handleCreateNodeFromData(value[0], value[1], helpers, site_url + REQUEST_URL_SLUG + value[2], log)
-			: null
-	);
 
 	log.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
 

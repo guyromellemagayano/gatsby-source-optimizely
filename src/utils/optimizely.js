@@ -1,6 +1,6 @@
+/* eslint-disable prettier/prettier */
 "use strict";
 
-import sleep from "then-sleep";
 import { CONTENT_ENDPOINT } from "../constants";
 import Request from "./request";
 
@@ -19,8 +19,6 @@ class Optimizely {
 
 	// Handle API requests
 	async request(method, path, body = null, headers = {}) {
-		await sleep(this.request_timeout);
-
 		// Prepare `path` for request execution
 		const request = new Request(this.site_url, {
 			headers: Object.assign({}, this.headers, headers),
@@ -254,16 +252,12 @@ class Optimizely {
 
 	// Handle `GET` request
 	async get(path, headers = {}) {
-		await sleep(this.request_timeout);
-
 		const response = await this.request("get", path, headers);
 		return response;
 	}
 
 	// Handle `POST` request
 	async post(path, body, headers = {}) {
-		await sleep(this.request_timeout);
-
 		const response = await this.request("post", path, body, headers);
 		return response;
 	}
