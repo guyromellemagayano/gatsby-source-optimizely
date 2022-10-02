@@ -16,28 +16,37 @@ import Optimizely from "./utils/optimizely";
  * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, log) => {
-	const nodeMetadata = {
-		...item,
-		id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
-		parent: null,
-		children: [],
-		internal: {
-			type: nodeType,
-			content: convertObjectToString(item),
-			contentDigest: helpers.createContentDigest(item)
-		}
-	};
+const handleCreateNodeFromData = (item, nodeType, helpers, endpoint, log) => {
+	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0) {
+		const nodeMetadata = {
+			...item,
+			id: helpers.createNodeId(`${nodeType}-${item?.id || item?.name}`),
+			parent: null,
+			children: [],
+			internal: {
+				type: nodeType,
+				content: convertObjectToString(item),
+				contentDigest: helpers.createContentDigest(item)
+			}
+		};
 
-	const node = Object.assign({}, item, nodeMetadata);
+		const node = Object.assign({}, item, nodeMetadata);
 
-	try {
-		await helpers.createNode(node)
-		log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
-		return node;
-	} catch (error) {
-		log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, error.message);
+		helpers
+			.createNode(node)
+			.then(() => {
+				log.warn(`(OK) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`);
+
+				return node;
+			})
+			.catch((err) => {
+				log.error(`(FAIL) [CREATE NODE] ${endpoint} - ${helpers.createNodeId(`${nodeType}-${item.id || item.name}`)}`, err.message);
+
+				throw err;
+			});
 	}
+
+	return Promise.resolve();
 };
 
 /**
@@ -148,26 +157,24 @@ exports.sourceNodes = async ({ actions, createNodeId, createContentDigest }, plu
 	});
 
 	for (const [nodeName, endpoint] of Object.entries(endpoints)) {
-		console.log("------------------------")
-				console.log(nodeName)
-				try {
-					const res = await optimizely
-						.get(endpoint);
-					if (res && Array.isArray(res) && res?.length > 0) {
-						await Promise.allSettled(res.map(async datum => {
-							await handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log)
-						}))
-					}
-					else {
-						await handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log)
-					}
-				} catch (error) {
-					console.log(error)
-					log.error(`An error occurred while fetching ${endpoint} endpoint data`, error.message);
-
-				}
+		console.log("------------------------");
+		console.log(nodeName);
+		try {
+			const res = await optimizely.get(endpoint);
+			if (res && Array.isArray(res) && res?.length > 0) {
+				await Promise.allSettled(
+					res.map(async (datum) => {
+						await handleCreateNodeFromData(datum, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
+					})
+				);
+			} else {
+				await handleCreateNodeFromData(res, nodeName, helpers, site_url + REQUEST_URL_SLUG + endpoint, log);
+			}
+		} catch (error) {
+			console.log(error);
+			log.error(`An error occurred while fetching ${endpoint} endpoint data`, error.message);
+		}
 	}
-
 
 	log.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
 
