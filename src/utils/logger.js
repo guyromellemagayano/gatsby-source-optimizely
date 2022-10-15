@@ -10,17 +10,19 @@ const logLevels = {
 		error: 0,
 		warn: 1,
 		info: 2,
-		verbose: 3,
-		debug: 4,
-		silly: 5
+		http: 3,
+		verbose: 4,
+		debug: 5,
+		silly: 6
 	},
 	colors: {
 		error: "bold red",
 		warn: "bold yellow",
 		info: "bold green",
-		verbose: "bold blue",
-		debug: "bold cyan",
-		silly: "bold magenta"
+		http: "bold magenta",
+		verbose: "bold cyan",
+		debug: "bold blue",
+		silly: "bold white"
 	}
 };
 
@@ -31,7 +33,7 @@ const { combine, timestamp, colorize, simple } = format;
 // Init `winston` logger
 export const logger = (log_level) =>
 	createLogger({
-		level: log_level || "info",
+		level: log_level || "debug",
 		levels: logLevels.levels,
 		format: combine(colorize(), simple(), timestamp()),
 		transports: [new transports.Console()]
