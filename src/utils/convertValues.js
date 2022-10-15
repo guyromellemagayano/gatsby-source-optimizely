@@ -1,4 +1,14 @@
 /**
+ * @description Fix circular references in the data
+ * @returns {Object} Fixed data
+ */
+const getCircularReplacer = () => {
+	const data = new WeakSet();
+
+	return (key, value) => (typeof value === "object" && value !== null ? (data.has(value) ? "[Circular]" : (data.add(value), value)) : value);
+};
+
+/**
  * @description Convert string to lowercase
  * @param {string} e
  * @returns {string} Lowercase string
@@ -87,7 +97,7 @@ export const convertStringToObject = (e) => (typeof e === "string" ? JSON.parse(
  * @param {object} e
  * @returns {string} String
  */
-export const convertObjectToString = (e) => (typeof e === "object" ? JSON.stringify(e, null, 2) : e);
+export const convertObjectToString = (e) => (Object.prototype.toString.call(e) === "[object Object]" ? JSON.stringify(e, getCircularReplacer(), 2) : e);
 
 /**
  * @description Convert number to string
