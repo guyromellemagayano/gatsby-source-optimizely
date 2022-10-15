@@ -7,12 +7,12 @@
 		"watch": "babel ./src/ --out-dir ./ --source-maps --watch",
 		"lint:eslint": "eslint \"./src/**/*.js\" --quiet --fix --color --ignore-path .gitignore",
 		"lint:prettier": "prettier \"./src/**/*.js\" --write --ignore-path .gitignore",
-		"lint": "npm run lint:eslint && npm run lint:prettier",
-		"test": "npm run lint",
-		"prepare": "cross-env NODE_ENV=production npm run build",
-		"validate": "npm run lint",
-		"ci:validate": "rm -rf node_modules && npm ci && npm run validate",
-		"prepublishOnly": "npm run ci:validate && npm run build"
+		"lint": "yarn lint:eslint && yarn lint:prettier",
+		"test": "yarn lint",
+		"prepare": "cross-env NODE_ENV=production yarn build",
+		"validate": "yarn lint",
+		"ci:validate": "rm -rf node_modules && npm ci && yarn validate",
+		"prepublishOnly": "yarn ci:validate && yarn build"
 	},
 	"homepage": "https://github.com/Epic-Design-Labs/gatsby-source-optimizely/blob/master/README.md",
 	"repository": {
@@ -104,7 +104,7 @@
 	},
 	"lint-staged": {
 		"**/*.{js,jsx,md,mdx,json}": [
-			"npm run lint",
+			"yarn lint",
 			"git add"
 		]
 	},
