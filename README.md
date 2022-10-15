@@ -111,15 +111,15 @@ options: {
 
 ### Log Level
 
-Set the log level for the Optimizely/Episerver API requests. Supports `info`, `debug`, `warn`, `error`.
+Set the log level for the Optimizely/Episerver API requests. Currently utiilizes [**winston**](https://github.com/winstonjs/winston) for the log level settings. Currently supports `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`.
 
-**Default:** `info`.
+**Default:** `debug`.
 
 ```javascript
 options: {
 	// ...
 
-	log_level: "info";
+	log_level: "debug";
 }
 ```
 
@@ -127,13 +127,13 @@ options: {
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `0`.
+**Default:** `10000`.
 
 ```javascript
 options: {
 	// ...
 
-	request_timeout: 0;
+	request_timeout: 10000;
 }
 ```
 
