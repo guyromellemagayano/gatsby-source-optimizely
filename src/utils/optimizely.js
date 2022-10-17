@@ -1,10 +1,10 @@
-/* eslint-disable prettier/prettier */
 "use strict";
 
-import { CONTENT_ENDPOINT } from "../constants";
-import Request from "./request";
+import sleep from "sleep-promise";
+import { CONTENT_ENDPOINT, REQUEST_THROTTLE_INTERVAL } from "../constants";
+import { Request } from "./request";
 
-class Optimizely {
+export class Optimizely {
 	constructor(config) {
 		if (!config) {
 			throw new Error("Optimizely/Episerver API config required. It is required to make any call to the API");
@@ -28,7 +28,7 @@ class Optimizely {
 		});
 
 		// Run request
-		const { data } = await request.run(method, path, body);
+		const response = sleep(REQUEST_THROTTLE_INTERVAL).then(async () => await request.run(method, path, body));
 
 		// Handle expanded keys and values
 		const handleExpandedKeyValues = async (values, label) => {
@@ -37,42 +37,26 @@ class Optimizely {
 
 				values.map(async (value) => {
 					if (value && Object.prototype.hasOwnProperty.call(value, "contentLink") && Object.keys(value)?.length > 0) {
-						if (value.contentLink.id) {
-							promises.push(request.run("get", CONTENT_ENDPOINT + value.contentLink.id + "?expand=*", body));
-						} else {
-							let message = "Expanded `contentLink` in `" + label + "` is missing `id` key";
+						if (typeof value.contentLink.id === "number") {
+							const response = sleep(REQUEST_THROTTLE_INTERVAL).then(async () => await request.run("get", CONTENT_ENDPOINT + value.contentLink.id + "?expand=*", body));
 
-							throw message;
+							promises.push(response);
+						} else {
+							throw new Error("Expanded `contentLink` in `" + label + "` is missing `id` key");
 						}
 					} else {
-						let message = "Expanded `" + label + "` is missing `contentLink` key";
-
-						throw message;
+						throw new Error("Expanded `" + label + "` is missing `contentLink` key");
 					}
+
+					return value;
 				});
-
-				await Promise.allSettled(promises)
-					.then((res) => {
-						if (res && Array.isArray(res) && res?.length > 0) {
-							res
-								.filter(({ status, value }) => status === "fulfilled" && value !== null)
-								.map(({ value }, index) => {
-									const { data } = value;
-
-									values[index] = data;
-
-									return values[index];
-								});
-						}
-
-						return Promise.resolve(values);
-					})
-					.catch((err) => Promise.reject(err));
 			} else if (values && Object.prototype.toString.call(values) === "[object Object]" && Object.keys(values)?.length > 0) {
 				let promises = [];
 
 				if (values && Object.prototype.hasOwnProperty.call(values, "id") && Object.keys(values)?.length > 0) {
-					promises.push(request.run("get", CONTENT_ENDPOINT + values.id + "?expand=*", body));
+					const response = sleep(REQUEST_THROTTLE_INTERVAL).then(async () => await request.run("get", CONTENT_ENDPOINT + values.id + "?expand=*", body));
+
+					promises.push(response);
 				} else {
 					let message = "Expanded `" + label + "` is missing `id` key";
 
@@ -82,15 +66,13 @@ class Optimizely {
 				await Promise.allSettled(promises)
 					.then((res) => {
 						if (res && Array.isArray(res) && res?.length > 0) {
-							res
-								.filter(({ status, value }) => status === "fulfilled" && value !== null)
-								.map(({ value }) => {
-									const { data } = value;
+							res.map(({ value = null }) => {
+								const { data } = value;
 
-									values = data;
+								values = data;
 
-									return values;
-								});
+								return values;
+							});
 						}
 
 						return Promise.resolve(values);
@@ -125,63 +107,53 @@ class Optimizely {
 					await Promise.allSettled(expandedKeyValuesPromises)
 						.then((res) => {
 							if (res && Array.isArray(res) && res?.length > 0) {
-								res
-									.filter(({ status, value }) => status === "fulfilled" && value !== null)
-									.map(({ value }, index) => {
-										switch (index) {
-											case 0: {
-												delete temp.contentLink.expanded.dynamicStyles;
-												temp.contentLink.expanded.dynamicStyles = value;
-												break;
-											}
-											case 1: {
-												delete temp.contentLink.expanded.items;
-												temp.contentLink.expanded.items = value;
-												break;
-											}
-											case 2: {
-												delete temp.contentLink.expanded.images;
-												temp.contentLink.expanded.images = value;
-												break;
-											}
-											case 3: {
-												delete temp.contentLink.expanded.form;
-												temp.contentLink.expanded.form = value;
-												break;
-											}
-											default:
-												break;
+								res.map(({ value }, index) => {
+									switch (index) {
+										case 0: {
+											delete temp.contentLink.expanded.dynamicStyles;
+											temp.contentLink.expanded.dynamicStyles = value;
+											break;
 										}
+										case 1: {
+											delete temp.contentLink.expanded.items;
+											temp.contentLink.expanded.items = value;
+											break;
+										}
+										case 2: {
+											delete temp.contentLink.expanded.images;
+											temp.contentLink.expanded.images = value;
+											break;
+										}
+										case 3: {
+											delete temp.contentLink.expanded.form;
+											temp.contentLink.expanded.form = value;
+											break;
+										}
+										default:
+											break;
+									}
 
-										return temp;
-									});
+									return temp;
+								});
 
 								return Promise.resolve(temp);
 							}
 						})
-						.catch((err) => {
-							this.log.error(`An error occurred while fetching content blocks from the Optimizely/Episerver API`, err.message);
-
-							return Promise.reject(err);
-						});
+						.catch((err) => Promise.reject(err));
 
 					return temp;
 				})
 			)
-				.then((res) => {
-					if (res && Array.isArray(res) && res?.length > 0) {
-						return Promise.resolve(res.filter(({ status, value }) => status === "fulfilled" && value !== null).map(({ value }) => value));
-					}
-				})
+				.then((res) => (res && Array.isArray(res) && res?.length > 0 ? res.map(({ value }) => Promise.resolve(value)) : Promise.resolve(res)))
 				.catch((err) => Promise.reject(err));
 
 			return expandedBlocks;
 		};
 
 		// Handle expanded data
-		if (data && Array.isArray(data) && data?.length > 0) {
-			const expandedData = await Promise.allSettled(
-				data.map(async (item) => {
+		if (response && Array.isArray(response) && response?.length > 0) {
+			const expandedResponse = await Promise.allSettled(
+				response.map(async (item) => {
 					const temp = Object.assign({}, item);
 
 					const { contentBlocks, contentBlocksTop, contentBlocksBottom } = temp;
@@ -207,18 +179,14 @@ class Optimizely {
 					return temp;
 				})
 			)
-				.then((res) => {
-					if (res && Array.isArray(res) && res?.length > 0) {
-						return Promise.resolve(res.filter(({ status, value }) => status === "fulfilled" && value !== null).map(({ value }) => value));
-					}
-				})
+				.then((res) => (res && Array.isArray(res) && res?.length > 0 ? Promise.resolve(res.map(({ value = null }) => value)) : Promise.resolve(res)))
 				.catch((err) => Promise.reject(err));
 
-			return expandedData;
-		} else if (data && Object.prototype.toString.call(data) === "[object Object]" && Object.keys(data)?.length > 0) {
+			return expandedResponse;
+		} else if (response && Object.prototype.toString.call(response) === "[object Object]" && Object.keys(response)?.length > 0) {
 			try {
-				const expandedDataPromise = new Promise((resolve, reject) => {
-					const temp = Object.assign({}, data);
+				const expandedResponsePromise = new Promise((resolve, reject) => {
+					const temp = Object.assign({}, response);
 
 					const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = temp;
 
@@ -243,22 +211,24 @@ class Optimizely {
 					return temp ? resolve(temp) : reject(temp);
 				});
 
-				return expandedDataPromise;
+				return expandedResponsePromise;
 			} catch (err) {
 				return Promise.reject(err);
 			}
-		} else return data;
+		} else return response;
 	}
 
 	// Handle `GET` request
 	async get(path, headers = {}) {
 		const response = await this.request("get", path, headers);
+
 		return response;
 	}
 
 	// Handle `POST` request
 	async post(path, body, headers = {}) {
 		const response = await this.request("post", path, body, headers);
+
 		return response;
 	}
 }

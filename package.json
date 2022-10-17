@@ -40,6 +40,7 @@
 		"gatsby-source-filesystem": "^4.21.1",
 		"micro": "^9.4.1",
 		"qs": "^6.11.0",
+		"sleep-promise": "^9.1.0",
 		"winston": "^3.8.1"
 	},
 	"devDependencies": {
