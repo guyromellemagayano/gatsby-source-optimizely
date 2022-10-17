@@ -18,9 +18,11 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 ## Features
 
 - Support for multiple `optimizely/episerver` API versions
-- Log level options for `optimizely/episerver` API endpoint requests: `info`, `debug`, `warn`, `error`
-- Support for additional headers
+- Log level options for `optimizely/episerver` API endpoint requests: `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`
+- Support for multiple, additional custom **headers**
 - Support for custom request timeout in all `optimizely/episerver` API requests
+- Support for data caching on subsequent `gatsby` source plugin runs
+- Add support for `expanded` data on content blocks _(`images`, `dynamicStyles`, `items`, `form` object data are currently supported with more to come in the future)_
 
 ## Installation and Setup
 
@@ -56,7 +58,11 @@ module.exports = {
 					client_id: process.env.OPTMIZELY_API_CLIENT_ID, // The client ID of the Optimizely/Episerver API user. Default is "Default"
 				},
 				endpoints: {
-					OptimizelySites: "/v2.0/site",
+					OptimizelyAboutUsDesignersPageContentChildren: "/v2.0/content/14675/children?expand=*",
+					OptimizelyAboutUsPageContentChildren: "/v2.0/content/14110/children?expand=*",
+					OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/v2.0/content/14129/children?expand=*",
+					OptimizelyBedAccessoriesLegsPageContentChildren: "/v2.0/content/14131/children?expand=*",
+
 				},
 			},
 		},
@@ -76,12 +82,12 @@ options: {
 
 	endpoints: {
 		// Single endpoint
-		OptimizelySites: "/v2.0/site",
+		OptimizelyAboutUsDesignersPageContentChildren: "/v2.0/content/14675/children?expand=*",
 
 		// Multiple endpoints
-		OptimizelyContent: "/v2.0/content/994?expand=*",
-		OptimizelyContent: "/v2.0/content/994/children?expand=*",
-		OptimizelySearchContent: "/v2.0/search/content?expand=*",
+		OptimizelyAboutUsPageContentChildren: "/v2.0/content/14110/children?expand=*",
+		OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/v2.0/content/14129/children?expand=*",
+		OptimizelyBedAccessoriesLegsPageContentChildren: "/v2.0/content/14131/children?expand=*",
 	}
 }
 ```
@@ -127,13 +133,13 @@ options: {
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `10000`.
+**Default:** `30000`.
 
 ```javascript
 options: {
 	// ...
 
-	request_timeout: 10000;
+	request_timeout: 30000;
 }
 ```
 
@@ -146,7 +152,7 @@ options: {
 	// ...
 
 	endpoints: {
-		OptimizelyContent: "/v2.0/content/994?expand=*";
+		OptimizelyAboutUsDesignersPageContentChildren: "/v2.0/content/14675/children?expand=*",
 	}
 }
 ```
@@ -155,23 +161,31 @@ you can query the data as follows:
 
 ```graphql
 {
-	allOptimizelyContent(limit: 1) {
+	allOptimizelyAboutUsDesignersPageContentChildren(filter: { status: { eq: "Published" } }) {
 		edges {
 			node {
+				id
+				name
+				contentLink {
+					id
+					url
+				}
+				contentType
+				language {
+					displayName
+					link
+					name
+				}
+				status
 				contentBlocks {
+					displayOption
 					contentLink {
-						id
 						expanded {
-							anchor1
-							subHeading
-							name
-							altText1
-							autoCrop
 							body
 							column1Body
 							column1PrimaryCTA {
-								target
 								text
+								target
 								title
 								url
 							}
@@ -193,93 +207,86 @@ you can query the data as follows:
 								title
 								url
 							}
+							contentLink {
+								id
+							}
 							contentType
 							disableImageZoom
-							displayFilter
-
+							dynamicStyles {
+								contentLink {
+									id
+								}
+								themeColor
+							}
 							eyeBrow
-							fourColumnDisplay
-							fullBleed
 							heading
 							headingH1
-							height
-							image {
-								url
-								guidValue
-								id
-								workId
-							}
-							image1 {
-								guidValue
-								id
-								url
-								workId
-							}
-							imageRatio
-							images {
-								displayOption
-							}
 							items {
-								displayOption
+								contentLink {
+									id
+								}
+								body
+								contentType
+								eyeBrow
+								heading
+								image {
+									id
+									url
+									expanded {
+										contentLink {
+											id
+											url
+										}
+										contentType
+										height
+										name
+										status
+										url
+										width
+										size
+									}
+								}
+								link {
+									target
+									text
+									title
+									url
+								}
+								name
+								status
+								parentLink {
+									id
+									url
+								}
+							}
+							language {
+								displayName
+								name
 							}
 							layout
-							link {
-								target
-								text
-								title
-								url
-							}
-							logo {
-								guidValue
-								id
-								url
-								workId
-							}
-							logoAltText
-							maxCount
-							mediaTextColor
-							noAutoPlay
-							orientation
-							parentPage {
-								guidValue
-								id
-								url
-								workId
-							}
 							primaryCTA {
-								target
 								text
-								title
 								url
+								title
+								target
 							}
-							recurse
 							secondaryCTA {
 								target
 								text
 								title
 								url
 							}
+							status
 							style
-							textAlign
 							textPosition
 							textPosition2
-							themeColor
-							useEpiSort
-							usePrimaryLinkStyle
-							video1 {
-								guidValue
+							image1 {
 								id
 								url
-								workId
 							}
 						}
-						guidValue
-						workId
 					}
-					displayOption
 				}
-				metaDescription
-				metaTitle
 			}
 		}
 	}

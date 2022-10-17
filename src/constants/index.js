@@ -6,6 +6,8 @@ export const IS_PROD = process.env.NODE_ENV === "production";
 export const REQUEST_URL_SLUG = "/api/episerver";
 export const REQUEST_ACCEPT_HEADER = "application/json";
 export const REQUEST_TIMEOUT = 30000;
+export const REQUEST_THROTTLE_INTERVAL = 1500;
+export const REQUEST_MAX_COUNT = 5;
 
 // Auth
 export const AUTH_REQUEST_CONTENT_TYPE_HEADER = "application/x-www-form-urlencoded";
