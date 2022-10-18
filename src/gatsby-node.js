@@ -1,6 +1,6 @@
 "use strict";
 
-import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, CORS_ORIGIN, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
+import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, CORS_ORIGIN, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
 import Auth from "./utils/auth";
 import { convertObjectToString, convertStringToLowercase } from "./utils/convertValues";
 import { logger } from "./utils/logger";
@@ -91,7 +91,8 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 			.description("The endpoints to create nodes for"),
 		log_level: Joi.string().default("debug").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
-		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds")
+		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds"),
+		request_throttle_interval: Joi.number().default(REQUEST_THROTTLE_INTERVAL).description("The request throttle interval to use in milliseconds")
 	});
 
 /**
@@ -115,7 +116,8 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 		endpoints = null,
 		log_level = "debug",
 		response_type = "json",
-		request_timeout = REQUEST_TIMEOUT
+		request_timeout = REQUEST_TIMEOUT,
+		request_throttle_interval = REQUEST_THROTTLE_INTERVAL
 	} = pluginOptions;
 
 	// Custom logger based on the `log_level` plugin option
@@ -154,7 +156,8 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 				"Access-Control-Allow-Origin": CORS_ORIGIN
 			}),
 			log,
-			request_timeout
+			request_timeout,
+			request_throttle_interval
 		});
 
 		for (const [nodeName, endpoint] of Object.entries(endpoints)) {
