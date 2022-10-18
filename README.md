@@ -22,6 +22,7 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 - Support for multiple, additional custom **headers**
 - Support for custom request timeout in all `optimizely/episerver` API requests
 - Support for data caching on subsequent `gatsby` source plugin runs
+- Support for throttling `optimizely/episerver` API requests
 - Add support for `expanded` data on content blocks _(`images`, `dynamicStyles`, `items`, `form` object data are currently supported with more to come in the future)_
 
 ## Installation and Setup
@@ -62,7 +63,6 @@ module.exports = {
 					OptimizelyAboutUsPageContentChildren: "/v2.0/content/14110/children?expand=*",
 					OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/v2.0/content/14129/children?expand=*",
 					OptimizelyBedAccessoriesLegsPageContentChildren: "/v2.0/content/14131/children?expand=*",
-
 				},
 			},
 		},
@@ -140,6 +140,20 @@ options: {
 	// ...
 
 	request_timeout: 30000;
+}
+```
+
+### Request Throttling
+
+Set a custom request throttling interval for the Optimizely/Episerver API requests (in milliseconds).
+
+**Default:** `3000`.
+
+```javascript
+options: {
+	// ...
+
+	request_throttle_interval: 3000;
 }
 ```
 
