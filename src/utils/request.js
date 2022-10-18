@@ -1,16 +1,18 @@
 "use strict";
 
 import axios from "axios";
-import { REQUEST_ACCEPT_HEADER, REQUEST_URL_SLUG } from "../constants";
+import { REQUEST_ACCEPT_HEADER, REQUEST_MAX_COUNT, REQUEST_URL_SLUG } from "../constants";
 import { convertStringToUppercase } from "./convertValues";
 
 export class Request {
-	constructor(hostname, { headers, response_type, log, request_timeout } = {}) {
+	constructor(hostname, { headers, response_type, log, request_timeout, request_throttle_interval } = {}) {
 		this.hostname = hostname;
 		this.headers = headers;
 		this.response_type = response_type;
 		this.log = log;
 		this.request_timeout = request_timeout;
+		this.pending_requests = 0;
+		this.request_throttle_interval = request_throttle_interval;
 	}
 
 	/**
@@ -35,10 +37,18 @@ export class Request {
 
 		// Use `axios` interceptors for all HTTP methods (GET, POST, PUT, DELETE, etc.)
 		RequestAxiosInstance.interceptors.request.use(
-			(config) => {
-				this.log.warn(`[${method.toUpperCase()}] ${this.hostname + REQUEST_URL_SLUG + path} - Request sent`);
-				return config;
-			},
+			(config) =>
+				new Promise((resolve) => {
+					this.log.warn(`[${method.toUpperCase()}] ${this.hostname + REQUEST_URL_SLUG + path} - Request sent`);
+
+					let requestInterval = setInterval(() => {
+						if (this.pending_requests < REQUEST_MAX_COUNT) {
+							this.pending_requests++;
+							clearInterval(requestInterval);
+							resolve(config);
+						}
+					}, this.request_throttle_interval);
+				}),
 			(res) => {
 				this.log.info(`[${method.toUpperCase()}] ${this.hostname + REQUEST_URL_SLUG + path} - Response received`);
 				return Promise.resolve(res);
@@ -55,19 +65,29 @@ export class Request {
 				// Send log message when endpoint request is successful
 				this.log.info(`[${convertStringToUppercase(method)}] ${this.hostname + REQUEST_URL_SLUG + path} (${res.status + " " + res.statusText})`);
 
+				// Decrement pending requests
+				this.pending_requests = Math.max(0, this.pending_requests - 1);
+
 				return Promise.resolve(res);
 			},
-			(err) => {
+			async (err) => {
 				if (err.response) {
 					// Send log message when error response is received
 					this.log.error(`[${convertStringToUppercase(method)}] ${this.hostname + REQUEST_URL_SLUG + path} - Restarting request...`);
+
+					await this.run(method, path, body);
 				} else if (err.request) {
 					// Send log message when error request is received
 					this.log.error(`[${convertStringToUppercase(method)}] ${this.hostname + REQUEST_URL_SLUG + path} - Restarting request...`);
+
+					await this.run(method, path, body);
 				} else {
 					// Send log message when error is thrown
 					this.log.error(`[${convertStringToUppercase(method)}] ${this.hostname + REQUEST_URL_SLUG + path} - ${err.message}`);
 				}
+
+				// Decrement pending requests
+				this.pending_requests = Math.max(0, this.pending_requests - 1);
 
 				return Promise.reject(err);
 			}
@@ -78,14 +98,14 @@ export class Request {
 		switch (updatedMethod) {
 			case "get": {
 				const result = await RequestAxiosInstance.get(path, body)
-					.then(({ data }) => data)
+					.then((res) => res)
 					.catch((err) => err);
 
 				return result;
 			}
 			case "post": {
 				const result = await RequestAxiosInstance.post(path, body)
-					.then(({ data }) => data)
+					.then((res) => res)
 					.catch((err) => err);
 
 				return result;
