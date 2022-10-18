@@ -28,7 +28,9 @@ export class Optimizely {
 		});
 
 		// Run request
-		const response = sleep(REQUEST_THROTTLE_INTERVAL).then(async () => await request.run(method, path, body));
+		const response = sleep(REQUEST_THROTTLE_INTERVAL)
+			.then(async () => await request.run(method, path, body))
+			.catch((err) => err);
 
 		// Handle expanded keys and values
 		const handleExpandedKeyValues = async (values, label) => {
@@ -38,7 +40,9 @@ export class Optimizely {
 				values.map(async (value) => {
 					if (value && Object.prototype.hasOwnProperty.call(value, "contentLink") && Object.keys(value)?.length > 0) {
 						if (typeof value.contentLink.id === "number") {
-							const response = sleep(REQUEST_THROTTLE_INTERVAL).then(async () => await request.run("get", CONTENT_ENDPOINT + value.contentLink.id + "?expand=*", body));
+							const response = sleep(REQUEST_THROTTLE_INTERVAL)
+								.then(async () => await request.run("get", CONTENT_ENDPOINT + value.contentLink.id + "?expand=*", body))
+								.catch((err) => err);
 
 							promises.push(response);
 						} else {
@@ -54,7 +58,9 @@ export class Optimizely {
 				let promises = [];
 
 				if (values && Object.prototype.hasOwnProperty.call(values, "id") && Object.keys(values)?.length > 0) {
-					const response = sleep(REQUEST_THROTTLE_INTERVAL).then(async () => await request.run("get", CONTENT_ENDPOINT + values.id + "?expand=*", body));
+					const response = sleep(REQUEST_THROTTLE_INTERVAL)
+						.then(async () => await request.run("get", CONTENT_ENDPOINT + values.id + "?expand=*", body))
+						.catch((err) => err);
 
 					promises.push(response);
 				} else {
