@@ -23,7 +23,7 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 - Support for custom request timeout in all `optimizely/episerver` API requests
 - Support for data caching on subsequent `gatsby` source plugin runs
 - Support for throttling `optimizely/episerver` API requests
-- Add support for `expanded` data on content blocks _(`images`, `dynamicStyles`, `items`, `form` object data are currently supported with more to come in the future)_
+- Add support for `expanded` data on content blocks: `images`, `dynamicStyles`, `items`, `form` object data are currently supported with more to come in the future
 
 ## Installation and Setup
 
