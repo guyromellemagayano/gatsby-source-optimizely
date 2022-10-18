@@ -161,24 +161,24 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 		});
 
 		for (const [nodeName, endpoint] of Object.entries(endpoints)) {
-			await optimizely
-				.get(endpoint)
-				.then(async (res) => {
-					nodes.push({
-						nodeName,
-						data: res
-					});
+			try {
+				const res = await optimizely.get(endpoint);
 
-					// Create nodes for each item in the response
-					return res && Array.isArray(res) && res.length > 0
-						? await Promise.allSettled(res.map(async (datum) => Promise.resolve(await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum.contentLink.url), log))))
-						: Promise.resolve(await handleCreateNodeFromData(res, nodeName, helpers, endpoint, log));
-				})
-				.catch((err) => {
-					log.error(`[GET] ${site_url + REQUEST_URL_SLUG + endpoint} (${err.status + " " + err.statusText})`);
-
-					return Promise.reject(err);
+				nodes.push({
+					nodeName,
+					data: res
 				});
+
+				if (res && Array.isArray(res) && res?.length > 0) {
+					await Promise.allSettled(res.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum.contentLink.url), log)));
+				} else {
+					await handleCreateNodeFromData(res, nodeName, helpers, endpoint, log);
+				}
+			} catch (err) {
+				log.error(`[GET] ${site_url + REQUEST_URL_SLUG + endpoint} (${err.status + " " + err.statusText})`);
+
+				return Promise.reject(err);
+			}
 		}
 
 		// Store the response from the Optimizely/Episerver API in the cache
@@ -204,8 +204,8 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 		sourceData?.map(({ nodeName = "", data = [] }) =>
 			data?.map(async (item) =>
 				item && Array.isArray(item) && item.length > 0
-					? await Promise.allSettled(item.map(async (datum) => Promise.resolve(await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum.contentLink.url), log))))
-					: Promise.resolve(await handleCreateNodeFromData(item, nodeName, helpers, convertStringToLowercase(item.contentLink.url), log))
+					? await Promise.allSettled(item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum.contentLink.url), log)))
+					: await handleCreateNodeFromData(item, nodeName, helpers, convertStringToLowercase(item.contentLink.url), log)
 			)
 		) || null;
 	}
