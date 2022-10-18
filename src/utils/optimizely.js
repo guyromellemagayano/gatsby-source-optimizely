@@ -25,13 +25,12 @@ export class Optimizely {
 			headers: Object.assign({}, this.headers, headers),
 			response_type: this.response_type,
 			log: this.log,
-			request_timeout: this.request_timeout
+			request_timeout: this.request_timeout,
+			request_throttle_interval: this.request_throttle_interval
 		});
 
 		// Run request
-		const response = sleep(this.request_throttle_interval)
-			.then(async () => await request.run(method, path, body))
-			.catch((err) => err);
+		const { data } = await request.run(method, path, body);
 
 		// Handle expanded keys and values
 		const handleExpandedKeyValues = async (values, label) => {
@@ -43,14 +42,10 @@ export class Optimizely {
 						if (value.contentLink.id) {
 							promises.push(request.run("get", CONTENT_ENDPOINT + value.contentLink.id + "?expand=*", body));
 						} else {
-							let message = "Expanded `contentLink` in `" + label + "` is missing `id` key";
-
-							throw message;
+							throw new Error("Expanded `contentLink` in `" + label + "` is missing `id` key");
 						}
 					} else {
-						let message = "Expanded `" + label + "` is missing `contentLink` key";
-
-						throw message;
+						throw new Error("Expanded `" + label + "` is missing `contentLink` key");
 					}
 				});
 
@@ -58,9 +53,9 @@ export class Optimizely {
 					.then((res) => {
 						if (res && Array.isArray(res) && res?.length > 0) {
 							res
-								.filter(({ status, value }) => status === "fulfilled" && value !== null)
-								.map(({ value }, index) => {
-									const { data } = value;
+								.filter(({ status = null, value = null }) => status === "fulfilled" && value !== null)
+								.map(({ value = null }, index) => {
+									const { data = null } = value;
 
 									values[index] = data;
 
@@ -77,18 +72,16 @@ export class Optimizely {
 				if (values && Object.prototype.hasOwnProperty.call(values, "id") && Object.keys(values)?.length > 0) {
 					promises.push(request.run("get", CONTENT_ENDPOINT + values.id + "?expand=*", body));
 				} else {
-					let message = "Expanded `" + label + "` is missing `id` key";
-
-					throw message;
+					throw new Error("Expanded `" + label + "` is missing `id` key");
 				}
 
 				await Promise.allSettled(promises)
 					.then((res) => {
 						if (res && Array.isArray(res) && res?.length > 0) {
 							res
-								.filter(({ status, value }) => status === "fulfilled" && value !== null)
-								.map(({ value }) => {
-									const { data } = value;
+								.filter(({ status = null, value = null }) => status === "fulfilled" && value !== null)
+								.map(({ value = null }) => {
+									const { data = null } = value;
 
 									values = data;
 
@@ -100,7 +93,7 @@ export class Optimizely {
 					})
 					.catch((err) => Promise.reject(err));
 			} else {
-				this.log.warn("Current `" + label + "` is not an array, object or null. Skipping...");
+				this.log.error("Current `" + label + "` is not an array, object or null. Skipping...");
 			}
 
 			return values;
@@ -129,29 +122,25 @@ export class Optimizely {
 						.then((res) => {
 							if (res && Array.isArray(res) && res?.length > 0) {
 								res
-									.filter(({ status, value }) => status === "fulfilled" && value !== null)
-									.map(({ value }, index) => {
+									.filter(({ status = null, value = null }) => status === "fulfilled" && value !== null)
+									.map(({ value = null }, index) => {
 										switch (index) {
-											case 0: {
+											case 0:
 												delete temp.contentLink.expanded.dynamicStyles;
 												temp.contentLink.expanded.dynamicStyles = value;
 												break;
-											}
-											case 1: {
+											case 1:
 												delete temp.contentLink.expanded.items;
 												temp.contentLink.expanded.items = value;
 												break;
-											}
-											case 2: {
+											case 2:
 												delete temp.contentLink.expanded.images;
 												temp.contentLink.expanded.images = value;
 												break;
-											}
-											case 3: {
+											case 3:
 												delete temp.contentLink.expanded.form;
 												temp.contentLink.expanded.form = value;
 												break;
-											}
 											default:
 												break;
 										}
@@ -162,11 +151,46 @@ export class Optimizely {
 								return Promise.resolve(temp);
 							}
 						})
-						.catch((err) => {
-							this.log.error(`An error occurred while fetching content blocks from the Optimizely/Episerver API`, err.message);
+						.catch((err) => Promise.reject(err));
 
-							return Promise.reject(err);
-						});
+					return temp;
+				})
+			)
+				.then((res) => {
+					if (res && Array.isArray(res) && res?.length > 0) {
+						return Promise.resolve(res.filter(({ status = null, value = null }) => status === "fulfilled" && value !== null).map(({ value = null }) => value));
+					}
+				})
+				.catch((err) => Promise.reject(err));
+
+			return expandedBlocks;
+		};
+
+		// Handle expanded data
+		if (data && Array.isArray(data) && data?.length > 0) {
+			const expandedData = await Promise.allSettled(
+				data.map(async (item) => {
+					const temp = Object.assign({}, item);
+
+					const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = temp;
+
+					if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
+						let expandedContentBlocks = await handleContentBlocks(contentBlocks);
+
+						temp.contentBlocks = expandedContentBlocks;
+					}
+
+					if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
+						let expandedContentBlocksTop = await handleContentBlocks(contentBlocksTop);
+
+						temp.contentBlocksTop = expandedContentBlocksTop;
+					}
+
+					if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
+						let expandedContentBlocksBottom = await handleContentBlocks(contentBlocksBottom);
+
+						temp.contentBlocksBottom = expandedContentBlocksBottom;
+					}
 
 					return temp;
 				})
@@ -178,60 +202,55 @@ export class Optimizely {
 				})
 				.catch((err) => Promise.reject(err));
 
-			return expandedBlocks;
-		};
+			return expandedData;
+		} else if (data && Object.prototype.toString.call(data) === "[object Object]" && Object.keys(data)?.length > 0) {
+			try {
+				const expandedDataPromise = new Promise((resolve, reject) => {
+					const temp = Object.assign({}, data);
 
-		// Handle expanded data
-		if (response && Array.isArray(response) && response?.length > 0) {
-			const expandedResponse = await Promise.allSettled(
-				response.map(async (item) => {
-					const temp = Object.assign({}, item);
+					const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = temp;
 
-					const { contentBlocks, contentBlocksTop, contentBlocksBottom } = temp;
+					if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
+						let expandedContentBlocks = handleContentBlocks(contentBlocks);
 
-					let expandedContentBlocks = contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0 ? await handleContentBlocks(contentBlocks) : null;
-					let expandedContentBlocksTop = contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0 ? await handleContentBlocks(contentBlocksTop) : null;
-					let expandedContentBlocksBottom = contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0 ? await handleContentBlocks(contentBlocksBottom) : null;
+						temp.contentBlocks = expandedContentBlocks;
+					}
 
-					temp.contentBlocks = expandedContentBlocks;
-					temp.contentBlocksTop = expandedContentBlocksTop;
-					temp.contentBlocksBottom = expandedContentBlocksBottom;
+					if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
+						let expandedContentBlocksTop = handleContentBlocks(contentBlocksTop);
 
-					return temp;
-				})
-			)
-				.then((res) => (res && Array.isArray(res) && res?.length > 0 ? Promise.resolve(res.map(({ value = null }) => value)) : Promise.resolve(res)))
-				.catch((err) => Promise.reject(err));
+						temp.contentBlocksTop = expandedContentBlocksTop;
+					}
 
-			return expandedResponse;
-		} else if (response && Object.prototype.toString.call(response) === "[object Object]" && Object.keys(response)?.length > 0) {
-			const temp = Object.assign({}, response);
+					if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
+						let expandedContentBlocksBottom = handleContentBlocks(contentBlocksBottom);
 
-			const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = temp;
+						temp.contentBlocksBottom = expandedContentBlocksBottom;
+					}
 
-			let expandedContentBlocks = contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0 ? await handleContentBlocks(contentBlocks) : null;
-			let expandedContentBlocksTop = contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0 ? await handleContentBlocks(contentBlocksTop) : null;
-			let expandedContentBlocksBottom = contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0 ? await handleContentBlocks(contentBlocksBottom) : null;
+					return temp ? resolve(temp) : reject(temp);
+				});
 
-			temp.contentBlocks = expandedContentBlocks;
-			temp.contentBlocksTop = expandedContentBlocksTop;
-			temp.contentBlocksBottom = expandedContentBlocksBottom;
-
-			return temp;
-		} else return response;
+				return expandedDataPromise;
+			} catch (err) {
+				return Promise.reject(err);
+			}
+		} else return data;
 	}
 
 	// Handle `GET` request
 	async get(path, headers = {}) {
-		const response = await this.request("get", path, headers);
+		sleep(this.request_throttle_interval);
 
+		const response = await this.request("get", path, headers);
 		return response;
 	}
 
 	// Handle `POST` request
 	async post(path, body, headers = {}) {
-		const response = await this.request("post", path, body, headers);
+		sleep(this.request_throttle_interval);
 
+		const response = await this.request("post", path, body, headers);
 		return response;
 	}
 }
