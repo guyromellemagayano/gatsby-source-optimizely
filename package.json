@@ -7,12 +7,12 @@
 		"watch": "babel ./src/ --out-dir ./ --source-maps --watch",
 		"lint:eslint": "eslint \"./src/**/*.js\" --quiet --fix --color --ignore-path .gitignore",
 		"lint:prettier": "prettier \"./src/**/*.js\" --write --ignore-path .gitignore",
-		"lint": "npm run lint:eslint && npm run lint:prettier",
-		"test": "npm run lint",
-		"prepare": "cross-env NODE_ENV=production npm run build",
-		"validate": "npm run lint",
-		"ci:validate": "rm -rf node_modules && npm ci && npm run validate",
-		"prepublishOnly": "npm run ci:validate && npm run build"
+		"lint": "yarn lint:eslint && yarn lint:prettier",
+		"test": "yarn lint",
+		"prepare": "cross-env NODE_ENV=production yarn build",
+		"validate": "yarn lint",
+		"ci:validate": "rm -rf node_modules && yarn install --frozen-lockfile && yarn validate",
+		"prepublishOnly": "yarn ci:validate && yarn build"
 	},
 	"homepage": "https://github.com/Epic-Design-Labs/gatsby-source-optimizely/blob/master/README.md",
 	"repository": {
@@ -37,11 +37,11 @@
 	"main": "index.js",
 	"dependencies": {
 		"axios": "^0.27.2",
+		"flatted": "^3.2.7",
 		"gatsby-source-filesystem": "^4.24.0",
+		"lodash": "^4.17.21",
 		"micro": "^9.4.1",
-		"qs": "^6.11.0",
-		"sleep-promise": "^9.1.0",
-		"winston": "^3.8.2"
+		"qs": "^6.11.0"
 	},
 	"devDependencies": {
 		"@babel/cli": "^7.19.3",
@@ -69,7 +69,7 @@
 		"react": "^18.2.0"
 	},
 	"peerDependencies": {
-		"gatsby": ">3.0.0"
+		"gatsby": ">4.0.0"
 	},
 	"bugs": {
 		"url": "https://github.com/Epic-Design-Labs/gatsby-source-optimizely/issues"
@@ -92,7 +92,7 @@
 	},
 	"lint-staged": {
 		"**/*.{js,jsx,md,mdx,json}": [
-			"npm run lint",
+			"yarn lint",
 			"git add"
 		]
 	},
@@ -100,7 +100,8 @@
 		"node": ">=16.15.1"
 	},
 	"volta": {
-		"node": "18.11.0",
-		"npm": "8.19.2"
-	}
+		"node": "16.18.0",
+		"yarn": "3.2.4"
+	},
+	"packageManager": "yarn@3.2.4"
 }
