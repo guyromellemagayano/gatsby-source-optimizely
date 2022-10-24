@@ -18,12 +18,11 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 ## Features
 
 - Support for multiple `optimizely/episerver` API versions
-- Log level options for `optimizely/episerver` API endpoint requests: `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`
-- Support for multiple, additional custom **headers**
+- Support for multiple, additional custom headers
 - Support for custom request timeout in all `optimizely/episerver` API requests
 - Support for data caching on subsequent `gatsby` source plugin runs
-- Support for throttling `optimizely/episerver` API requests
-- Add support for `expanded` data on content blocks: `images`, `dynamicStyles`, `items`, `form` object data are currently supported with more to come in the future
+- Support for throttling and debouncing `optimizely/episerver` API requests
+- Add support for `expanded` data on some content blocks: `images`, `dynamicStyles`, `items`, `form` key fields are currently supported with more to come in the future
 
 ## Installation and Setup
 
@@ -115,31 +114,17 @@ options: {
 }
 ```
 
-### Log Level
-
-Set the log level for the Optimizely/Episerver API requests. Currently utiilizes [**winston**](https://github.com/winstonjs/winston) for the log level settings. Currently supports `error`, `warn`, `info`, `http`, `verbose`, `debug`, `silly`.
-
-**Default:** `debug`.
-
-```javascript
-options: {
-	// ...
-
-	log_level: "debug";
-}
-```
-
 ### Request Timeout
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `30000`.
+**Default:** `120000` _(120 seconds)_.
 
 ```javascript
 options: {
 	// ...
 
-	request_timeout: 30000;
+	request_timeout: 120000;
 }
 ```
 
@@ -154,6 +139,20 @@ options: {
 	// ...
 
 	request_throttle_interval: 3000;
+}
+```
+
+### Request Debouncing
+
+Set a custom request debouncing interval for the Optimizely/Episerver API requests (in milliseconds).
+
+**Default:** `3000`.
+
+```javascript
+options: {
+	// ...
+
+	request_debounce_interval: 3000;
 }
 ```
 
