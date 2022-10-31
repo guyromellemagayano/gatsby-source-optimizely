@@ -95,3 +95,10 @@ export const convertObjectToString = (e) => (Object.prototype.toString.call(e) =
  * @returns {string} String
  */
 export const convertNumberToString = (e) => (typeof e === "number" ? e.toString() : e);
+
+/**
+ * @description Convert array to string
+ * @param {array} e
+ * @returns {string} String
+ */
+export const convertArrayToString = (e) => (Array.isArray(e) ? e.toString() : e);
