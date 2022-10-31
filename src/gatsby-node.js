@@ -1,10 +1,42 @@
 "use strict";
 
-import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, CORS_ORIGIN, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
+import crypto from "crypto";
+import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, CONTENT_ENDPOINT, CORS_ORIGIN, REQUEST_DEBOUNCE_INTERVAL, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
 import Auth from "./utils/auth";
 import { convertObjectToString, convertStringToLowercase } from "./utils/convertValues";
-import { logger } from "./utils/logger";
 import { Optimizely } from "./utils/optimizely";
+
+/**
+ * @description Source nodes from cache
+ * @param {Object} cache
+ * @returns {Promise<void>} Cache promise
+ */
+const handleSourceNodesFromCache = async (cache = null, helpers = null) =>
+	await Promise.allSettled(
+		cache?.map((result) => {
+			const { nodeName = null, data = null } = result;
+
+			return data && Array.isArray(data) && data.length > 0
+				? data.map(async (item) => {
+						if (item && Array.isArray(item) && item.length > 0) {
+							item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum?.contentLink?.url)));
+						} else await handleCreateNodeFromData(item, nodeName, helpers, convertStringToLowercase(item?.contentLink?.url));
+				  })
+				: result;
+		}) || null
+	)
+		.then((res) =>
+			Promise.resolve(() => {
+				console.info(`[NODE] Cache (OK)`);
+				return res;
+			})
+		)
+		.catch((err) =>
+			Promise.reject(() => {
+				console.error("[NODE] Cache (FAIL)", err.message);
+				throw err;
+			})
+		);
 
 /**
  * @description Create a node from the data
@@ -12,37 +44,42 @@ import { Optimizely } from "./utils/optimizely";
  * @param {string} nodeType
  * @param {Object} helpers
  * @param {string} endpoint
- * @param {Object} log
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, log) => {
+const handleCreateNodeFromData = async (item = null, nodeType = null, helpers = null, endpoint = null) => {
 	const { createNode, createNodeId, createContentDigest } = helpers;
 
-	const nodeMetadata = {
-		...item,
-		id: createNodeId(`${nodeType}-${endpoint}`),
-		parent: null,
-		children: [],
-		internal: {
-			type: nodeType,
-			content: convertObjectToString(item),
-			contentDigest: createContentDigest(item)
-		}
-	};
+	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0 && typeof endpoint === "string" && endpoint.length > 0) {
+		const nodeMetadata = {
+			...item,
+			id: createNodeId(`${nodeType}-${endpoint}`),
+			parent: null,
+			children: [],
+			internal: {
+				type: nodeType,
+				content: convertObjectToString(item),
+				contentDigest: createContentDigest(convertObjectToString(item))
+			}
+		};
 
-	const node = Object.assign({}, item, nodeMetadata);
+		const node = Object.assign({}, item, nodeMetadata);
 
-	await createNode(node)
-		.then(() => {
-			log.http(`[NODE] ${endpoint} - ${createNodeId(`${nodeType}-${endpoint}`)} (OK)`);
+		await createNode(node)
+			.then(() =>
+				Promise.resolve(() => {
+					console.info(`[NODE] ${endpoint} - ${nodeType} (OK)`);
+					return node;
+				})
+			)
+			.catch((err) =>
+				Promise.reject(() => {
+					console.error(`[NODE] ${endpoint} - ${nodeType} (FAIL)`, err.message);
+					throw err;
+				})
+			);
 
-			return Promise.resolve(node);
-		})
-		.catch((err) => {
-			log.error(`[NODE] ${endpoint} - ${createNodeId(`${nodeType}-${endpoint}`)} (FAIL)`);
-
-			return Promise.reject(err);
-		});
+		return node;
+	}
 };
 
 /**
@@ -89,10 +126,10 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 				"object.required": "The `endpoints` object is required."
 			})
 			.description("The endpoints to create nodes for"),
-		log_level: Joi.string().default("debug").description("The log level to use"),
 		response_type: Joi.string().default("json").description("The response type to use"),
 		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds"),
-		request_throttle_interval: Joi.number().default(REQUEST_THROTTLE_INTERVAL).description("The request throttle interval to use in milliseconds")
+		request_throttle_interval: Joi.number().default(REQUEST_THROTTLE_INTERVAL).description("The request throttle interval to use in milliseconds"),
+		request_debounce_interval: Joi.number().default(REQUEST_DEBOUNCE_INTERVAL).description("The request debounce interval to use in milliseconds")
 	});
 
 /**
@@ -114,14 +151,11 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 	const {
 		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default", headers = {} },
 		endpoints = null,
-		log_level = "debug",
 		response_type = "json",
 		request_timeout = REQUEST_TIMEOUT,
-		request_throttle_interval = REQUEST_THROTTLE_INTERVAL
+		request_throttle_interval = REQUEST_THROTTLE_INTERVAL,
+		request_debounce_interval = REQUEST_DEBOUNCE_INTERVAL
 	} = pluginOptions;
-
-	// Custom logger based on the `log_level` plugin option
-	const log = logger(log_level);
 
 	// Prepare node sourcing helpers
 	const helpers = Object.assign({}, actions, {
@@ -130,20 +164,20 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 	});
 
 	// Store the response from the Optimizely/Episerver API in the cache
-	const cacheKey = "gatsby-source-optimizely-api-data-key";
-	const nodes = [];
-
+	const cacheKey = crypto.createHash("md5").update(JSON.stringify(pluginOptions)).digest("hex");
 	let sourceData = await cache.get(cacheKey);
 
 	// If the data is not cached, fetch it from the Optimizely/Episerver API
 	if (!sourceData) {
+		console.warn(`Cache is empty. Fetching fresh data from the Optimizely/Episerver API...`);
+
 		// Authenticate with the Optimizely/Episerver
-		const auth = new Auth({ site_url, username, password, grant_type, client_id, log, response_type, request_timeout });
+		const auth = new Auth({ site_url, username, password, grant_type, client_id, response_type, request_timeout });
 
 		const authData = await auth.post();
 
 		// Display the auth data
-		authData?.access_token ? log.info(`[AUTH] ${authData.access_token} - OK`) : log.error(`[AUTH] ${authData.access_token} - FAIL`);
+		authData?.access_token ? console.info(`[TOKEN] ${authData.access_token} - (OK)`) : console.error(`[TOKEN] ${authData.access_token} - (FAIL)`);
 
 		// Create a new Optimizely instance
 		const optimizely = new Optimizely({
@@ -155,62 +189,241 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 				"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
 				"Access-Control-Allow-Origin": CORS_ORIGIN
 			}),
-			log,
 			request_timeout,
-			request_throttle_interval
+			request_throttle_interval,
+			request_debounce_interval
 		});
 
-		for (const [nodeName, endpoint] of Object.entries(endpoints)) {
-			try {
-				const res = await optimizely.get(endpoint);
+		// Handle expanded keys and their values
+		const expandKeyValues = async (items, nodeName, endpoint) => {
+			const tempItems = [];
 
-				nodes.push({
-					nodeName,
-					data: res
+			if (items && Array.isArray(items) && items?.length > 0) {
+				items.map(async (item = null) => {
+					const tempItem = Object.assign({}, item);
+
+					if (tempItem?.contentLink?.id && typeof tempItem?.contentLink?.id === "number") {
+						tempItems.push(await optimizely.request(`${CONTENT_ENDPOINT + tempItem.contentLink.id + "?expand=*"}`, nodeName, "get"));
+					}
+
+					return tempItem;
 				});
+			} else if (items && Object.prototype.toString.call(items) === "[object Object]" && Object.keys(items).length > 0) {
+				const tempItem = Object.assign({}, items);
+
+				if (tempItem?.contentLink?.id && typeof tempItem?.contentLink?.id === "number") {
+					tempItems.push(await optimizely.request(`${CONTENT_ENDPOINT + tempItem.contentLink.id + "?expand=*"}`, nodeName, "get"));
+				}
+
+				return tempItem;
+			} else {
+				return items;
+			}
+
+			await Promise.allSettled(tempItems)
+				.then((res) =>
+					Promise.resolve(
+						res && Array.isArray(res) && res?.length > 0
+							? res.map(({ value = null }, index) => {
+									const { data = null } = value;
+									const updatedValue = { ...items[index], ...data };
+
+									console.info(`[DATA] ${site_url + REQUEST_URL_SLUG + endpoint} - ${nodeName} - (OK)`);
+
+									return updatedValue;
+							  })
+							: res
+					)
+				)
+				.catch((err) =>
+					Promise.reject(() => {
+						console.error(`[DATA] ${site_url + REQUEST_URL_SLUG + endpoint} - ${nodeName} - (FAIL)`, err.message);
+						throw err;
+					})
+				);
+		};
+
+		// Handle expanded content blocks
+		const expandContentBlocks = async (blocks, nodeName, endpoint) => {
+			const tempBlocks = [];
+
+			if (blocks && Array.isArray(blocks) && blocks?.length > 0) {
+				await Promise.allSettled(
+					blocks.map(async (block) => {
+						const tempBlock = Object.assign({}, block);
+
+						const { contentLink: { expanded: { dynamicStyles = null, items = null, images = null, form = null } = null } = null } = tempBlock;
+
+						if (dynamicStyles) {
+							const dynamicStylesPromise = await expandKeyValues(dynamicStyles, nodeName, endpoint);
+							tempBlocks.push(dynamicStylesPromise);
+						}
+
+						if (items) {
+							const itemsPromise = await expandKeyValues(items, nodeName, endpoint);
+							tempBlocks.push(itemsPromise);
+						}
+
+						if (images) {
+							const imagesPromise = await expandKeyValues(images, nodeName, endpoint);
+							tempBlocks.push(imagesPromise);
+						}
+
+						if (form) {
+							const formPromise = await expandKeyValues(form, nodeName, endpoint);
+							tempBlocks.push(formPromise);
+						}
+
+						return tempBlock;
+					})
+				)
+					.then((res) => Promise.resolve(res))
+					.catch((err) => Promise.reject(err));
+			} else if (blocks && Object.prototype.toString.call(blocks) === "[object Object]" && Object.keys(blocks).length > 0) {
+				const tempBlock = Object.assign({}, blocks);
+
+				const { contentLink: { expanded: { dynamicStyles = null, items = null, images = null, form = null } = null } = null } = tempBlock;
+
+				if (dynamicStyles) {
+					const dynamicStylesPromise = await expandKeyValues(dynamicStyles, nodeName, endpoint);
+					tempBlocks.push(dynamicStylesPromise);
+				}
+
+				if (items) {
+					const itemsPromise = await expandKeyValues(items, nodeName, endpoint);
+					tempBlocks.push(itemsPromise);
+				}
+
+				if (images) {
+					const imagesPromise = await expandKeyValues(images, nodeName, endpoint);
+					tempBlocks.push(imagesPromise);
+				}
+
+				if (form) {
+					const formPromise = await expandKeyValues(form, nodeName, endpoint);
+					tempBlocks.push(formPromise);
+				}
+
+				return tempBlock;
+			} else {
+				return blocks;
+			}
+
+			await Promise.allSettled(tempBlocks)
+				.then((res) =>
+					res && Array.isArray(res) && res?.length > 0
+						? res.map(({ value = null }, index) => {
+								const { data = null } = value;
+								const updatedValue = { ...blocks[index], ...data };
+
+								console.info(`[EXPAND] ${endpoint} - ${nodeName} - (OK)`);
+
+								return updatedValue;
+						  })
+						: res
+				)
+				.catch((err) =>
+					Promise.reject(() => {
+						console.error(`[EXPAND] ${endpoint} - ${nodeName} - (FAIL)`, err.message);
+						throw err;
+					})
+				);
+		};
+
+		const data = [];
+
+		// Get the endpoints from the Optimizely/Episerver site and store as promises
+		for (const [nodeName, endpoint] of Object.entries(endpoints)) {
+			const url = site_url + REQUEST_URL_SLUG + endpoint;
+
+			try {
+				const res = await optimizely.request(endpoint, nodeName, "get");
 
 				if (res && Array.isArray(res) && res?.length > 0) {
-					await Promise.allSettled(res.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum.contentLink.url), log)));
+					await Promise.allSettled(
+						res.map(async (item) => {
+							// Shallow copy of the item
+							const tempItem = Object.assign({}, item);
+
+							// Check if the item has a content block properties
+							const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
+
+							// If the item has a content block property, fetch the content block data and expand its properties
+							if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
+								const expandedContentBlocks = await expandContentBlocks(contentBlocks, nodeName, endpoint);
+								tempItem.contentBlocks = expandedContentBlocks;
+							}
+
+							// If the item has a content block property, fetch the content block data and expand its properties
+							if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
+								const expandedContentBlocks = await expandContentBlocks(contentBlocksTop, nodeName, endpoint);
+								tempItem.contentBlocksTop = expandedContentBlocks;
+							}
+
+							// If the item has a content block property, fetch the content block data and expand its properties
+							if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
+								const expandedContentBlocks = await expandContentBlocks(contentBlocksBottom, nodeName, endpoint);
+								tempItem.contentBlocksBottom = expandedContentBlocks;
+							}
+
+							return tempItem;
+						})
+					)
+						.then((res) => {
+							data.push({ [nodeName]: res });
+							console.info(`[EXPAND] ${url} - ${nodeName} - (OK)`);
+							return res;
+						})
+						.catch((err) => {
+							console.error(`[EXPAND] ${url} - ${nodeName} - (FAIL)`, err.message);
+							throw err;
+						});
 				} else {
-					await handleCreateNodeFromData(res, nodeName, helpers, endpoint, log);
+					try {
+						// Shallow copy of the item
+						const tempItem = Object.assign({}, res);
+
+						// Check if the item has a content block properties
+						const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
+
+						// If the item has a content block property, fetch the content block data and expand its properties
+						if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
+							const expandedContentBlocks = await expandContentBlocks(contentBlocks, nodeName, endpoint);
+							tempItem.contentBlocks = expandedContentBlocks;
+						}
+
+						// If the item has a content block property, fetch the content block data and expand its properties
+						if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
+							const expandedContentBlocks = await expandContentBlocks(contentBlocksTop, nodeName, endpoint);
+							tempItem.contentBlocksTop = expandedContentBlocks;
+						}
+
+						// If the item has a content block property, fetch the content block data and expand its properties
+						if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
+							const expandedContentBlocks = await expandContentBlocks(contentBlocksBottom, nodeName, endpoint);
+							tempItem.contentBlocksBottom = expandedContentBlocks;
+						}
+
+						data.push({ [nodeName]: tempItem });
+						console.info(`[EXPAND] ${url} - ${nodeName} - (OK)`);
+						return tempItem;
+					} catch (err) {
+						console.error(`[EXPAND] ${url} - ${nodeName} - (FAIL)`, err.message);
+						throw err;
+					}
 				}
 			} catch (err) {
-				log.error(`[GET] ${site_url + REQUEST_URL_SLUG + endpoint} (${err.status + " " + err.statusText})`);
-
-				return Promise.reject(err);
+				console.error(`[ENDPOINTS] ${url} - ${nodeName} - (FAIL)`, err.message);
+				throw err;
 			}
 		}
-
-		// Store the response from the Optimizely/Episerver API in the cache
-		sourceData = nodes.length > 0 ? nodes : sourceData;
-
-		// Cache the data
-		await cache
-			.set(cacheKey, sourceData)
-			.then(() => {
-				// If the data is cached, display a success message
-				log.info(`[CACHE] ${cacheKey} (OK) - ${sourceData?.length || 0} items`);
-
-				return Promise.resolve();
-			})
-			.catch((err) => {
-				// If the data is not cached, display an error message
-				log.error(`[CACHE] ${cacheKey} (FAIL)`);
-
-				return Promise.reject(err);
-			});
 	} else {
-		// Create nodes for each item in the cached response
-		sourceData?.map(({ nodeName = "", data = [] }) =>
-			data?.map(async (item) =>
-				item && Array.isArray(item) && item.length > 0
-					? await Promise.allSettled(item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum.contentLink.url), log)))
-					: await handleCreateNodeFromData(item, nodeName, helpers, convertStringToLowercase(item.contentLink.url), log)
-			)
-		) || null;
+		// If the data is cached, display a success message
+		console.info(`[CACHE] Detected with hash key ${cacheKey} containing ${sourceData.length || 0} items`);
+
+		// Create nodes from the cached data
+		await handleSourceNodesFromCache(sourceData, helpers);
 	}
-
-	log.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
-
-	return;
 };
+
+exports.onPostBuild = async ({ reporter, basePath, pathPrefix }) => reporter.info(`@epicdesignlabs/gatsby-source-optimizely task processing complete with current site built with "basePath": ${basePath} and "pathPrefix": ${pathPrefix}`);
