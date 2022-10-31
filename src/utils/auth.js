@@ -13,7 +13,6 @@ class Auth {
 		this.password = config.password;
 		this.grant_type = config.grant_type;
 		this.client_id = config.client_id;
-		this.log = config.log;
 		this.response_type = config.response_type;
 		this.request_timeout = config.request_timeout;
 	}
@@ -37,7 +36,20 @@ class Auth {
 			)
 		};
 
-		const { data } = await axios(config);
+		const { data } = await axios(config)
+			.then((res) => {
+				// Send log message when endpoint request is successful
+				console.warn(`[${config.method.toUpperCase()}] ${config.url} (${res.statusText})`);
+
+				return res;
+			})
+			.catch((err) => {
+				// Send log message when endpoint request is unsuccessful
+				console.error(`[${config.method.toUpperCase()}] ${config.url} - ${err.message}`);
+
+				return err;
+			});
+
 		return data;
 	}
 }
