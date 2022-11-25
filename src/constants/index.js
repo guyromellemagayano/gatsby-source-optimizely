@@ -5,9 +5,6 @@ export const IS_PROD = process.env.NODE_ENV === "production";
 // Request
 export const REQUEST_URL_SLUG = "/api/episerver";
 export const REQUEST_ACCEPT_HEADER = "application/json";
-export const REQUEST_TIMEOUT = 1800000;
-export const REQUEST_THROTTLE_INTERVAL = 6000;
-export const REQUEST_DEBOUNCE_INTERVAL = 6000;
 export const REQUEST_TIMEOUT = 120000;
 export const REQUEST_THROTTLE_INTERVAL = 3000;
 export const REQUEST_DEBOUNCE_INTERVAL = 3000;
