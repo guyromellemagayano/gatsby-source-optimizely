@@ -42,7 +42,8 @@
 		"gatsby-source-filesystem": "^4.24.0",
 		"lodash": "^4.17.21",
 		"micro": "^9.4.1",
-		"qs": "^6.11.0"
+		"qs": "^6.11.0",
+		"winston": "^3.8.2"
 	},
 	"devDependencies": {
 		"@babel/cli": "^7.19.3",
