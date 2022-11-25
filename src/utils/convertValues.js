@@ -1,104 +1,117 @@
 /**
  * @description Convert string to lowercase
- * @param {string} e
- * @returns {string} Lowercase string
+ * @param {String} e
+ * @returns {String} Lowercase string
  */
-export const convertStringToLowercase = (e) => (typeof e === "string" ? e.toLowerCase() : e);
+export const convertStringToLowercase = (e) => (typeof e === "string" && e?.length > 0 && e?.length > 0 ? e.toLowerCase() : e);
 
 /**
  * @description Convert string to uppercase
- * @param {string} e
- * @returns {string} Uppercase string
+ * @param {String} e
+ * @returns {String} Uppercase string
  */
-export const convertStringToUppercase = (e) => (typeof e === "string" ? e.toUpperCase() : e);
+export const convertStringToUppercase = (e) => (typeof e === "string" && e?.length > 0 ? e.toUpperCase() : e);
 
 /**
  * @description Convert string to title case
- * @param {string} e
- * @returns {string} Title case string
+ * @param {String} e
+ * @returns {String} Title case string
  */
-export const convertStringToTitleCase = (e) => (typeof e === "string" ? e.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()) : e);
+export const convertStringToTitleCase = (e) =>
+	typeof e === "string" && e?.length > 0
+		? (e = e
+				.toLowerCase()
+				.split(" ")
+				.map((e) => e.charAt(0).toUpperCase() + e.slice(1))
+				.join(" "))
+		: e;
 
 /**
  * @description Convert string to camel case
- * @param {string} e
- * @returns {string} Camel case string
+ * @param {String} e
+ * @returns {String} Camel case string
  */
-export const convertStringToCamelCase = (e) => (typeof e === "string" ? e.replace(/([A-Z])/g, " $1").replace(/^./, (str) => str.toUpperCase()) : e);
+export const convertStringToCamelCase = (e) => (typeof e === "string" && e?.length > 0 ? e.toLowerCase().replace(/[^a-zA-Z0-9]+(.)/g, (m, chr) => chr.toUpperCase()) : e);
 
 /**
  * @description Convert string to snake case
- * @param {string} e
- * @returns {string} Snake case string
+ * @param {String} e
+ * @returns {String} Snake case string
  */
-export const convertStringToSnakeCase = (e) => (typeof e === "string" ? e.replace(/\s/g, "_").toLowerCase() : e);
+export const convertStringToSnakeCase = (e) => (typeof e === "string" && e?.length > 0 ? e.replace(/\s/g, "_").toLowerCase() : e);
 
 /**
  * @description Convert string to kebab case
- * @param {string} e
- * @returns {string} Kebab case string
+ * @param {String} e
+ * @returns {String} Kebab case string
  */
-export const convertStringToKebabCase = (e) => (typeof e === "string" ? e.replace(/\s/g, "-").toLowerCase() : e);
+export const convertStringToKebabCase = (e) =>
+	typeof e === "string" && e?.length > 0
+		? e
+				.match(/[A-Z]{2,}(?=[A-Z][a-z]+[0-9]*|\b)|[A-Z]?[a-z]+[0-9]*|[A-Z]|[0-9]+/g)
+				.map((x) => x.toLowerCase())
+				.join("-")
+		: e;
 
 /**
  * @description Convert string to constant case
- * @param {string} e
- * @returns {string} Constant case string
+ * @param {String} e
+ * @returns {String} Constant case string
  */
-export const convertStringToConstantCase = (e) => (typeof e === "string" ? e.replace(/\s/g, "_").toUpperCase() : e);
+export const convertStringToConstantCase = (e) => (typeof e === "string" && e?.length > 0 ? e.replace(/\s/g, "_").toUpperCase() : e);
 
 /**
  * @description Convert string to sentence case
- * @param {string} e
- * @returns {string} Sentence case string
+ * @param {String} e
+ * @returns {String} Sentence case string
  */
-export const convertStringToSentenceCase = (e) => (typeof e === "string" ? e.replace(/\s/g, " ").replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()) : e);
+export const convertStringToSentenceCase = (e) => (typeof e === "string" && e?.length > 0 ? e.replace(/\s/g, " ").replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substr(1).toLowerCase()) : e);
 
 /**
  * @description Convert string to number
- * @param {string} e
+ * @param {String} e
  * @returns {number} Number
  */
-export const convertStringToNumber = (e) => (typeof e === "string" ? Number(e) : e);
+export const convertStringToNumber = (e) => (typeof e === "string" && e?.length > 0 ? Number(e) : e);
 
 /**
  * @description Convert string to boolean
- * @param {string} e
+ * @param {String} e
  * @returns {boolean} Boolean
  */
-export const convertStringToBoolean = (e) => (typeof e === "string" ? e === "true" : e);
+export const convertStringToBoolean = (e) => (typeof e === "string" && e?.length > 0 ? e === "true" : e);
 
 /**
  * @description Convert string to array
- * @param {string} e
+ * @param {String} e
  * @returns {array} Array
  */
-export const convertStringToArray = (e) => (typeof e === "string" ? e.split(",") : e);
+export const convertStringToArray = (e) => (typeof e === "string" && e?.length > 0 ? e.split(",") : e);
 
 /**
  * @description Convert string to object
- * @param {string} e
+ * @param {String} e
  * @returns {object} Object
  */
-export const convertStringToObject = (e) => (typeof e === "string" ? JSON.parse(e) : e);
+export const convertStringToObject = (e) => (typeof e === "string" && e?.length > 0 ? JSON.parse(e) : e);
 
 /**
  * @description Convert object to string
  * @param {object} e
- * @returns {string} String
+ * @returns {String} String
  */
-export const convertObjectToString = (e) => (Object.prototype.toString.call(e) === "[object Object]" ? JSON.stringify(e) : e);
-
-/**
- * @description Convert number to string
- * @param {number} e
- * @returns {string} String
- */
-export const convertNumberToString = (e) => (typeof e === "number" ? e.toString() : e);
+export const convertObjectToString = (e) => (e && Object.prototype.toString.call(e) === "[object Object]" && Object.keys(e)?.length > 0 ? JSON.stringify(e) : e);
 
 /**
  * @description Convert array to string
  * @param {array} e
- * @returns {string} String
+ * @returns {String} String
  */
-export const convertArrayToString = (e) => (Array.isArray(e) ? e.toString() : e);
+export const convertArrayToString = (e) => (e && Object.prototype.toString.call(e) === "[object Object]" && Object.keys(e)?.length > 0 ? e.join(" ") : e);
+
+/**
+ * @description Convert number to string
+ * @param {number} e
+ * @returns {String} String
+ */
+export const convertNumberToString = (e) => (typeof e === "number" ? e.toString() : e);
