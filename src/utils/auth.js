@@ -39,15 +39,14 @@ class Auth {
 		const { data } = await axios(config)
 			.then((res) => {
 				// Send log message when endpoint request is successful
-				console.warn(`[${config.method.toUpperCase()}] ${config.url} (${res.statusText})`);
+				this.log.info(`[${config.method.toUpperCase()}] ${config.url} (${res.status + " " + res.statusText})`);
 
-				return res;
+				return Promise.resolve(res);
 			})
 			.catch((err) => {
-				// Send log message when endpoint request is unsuccessful
-				console.error(`[${config.method.toUpperCase()}] ${config.url} - ${err.message}`);
+				this.log.error(`[${config.method.toUpperCase()}] ${config.url} (${err.status + " " + err.statusText})`);
 
-				return err;
+				return Promise.reject(err);
 			});
 
 		return data;
