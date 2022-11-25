@@ -102,8 +102,8 @@
 		"node": ">=16.15.1"
 	},
 	"volta": {
-		"node": "16.18.0",
-		"yarn": "3.2.4"
+		"node": "16.18.1",
+		"yarn": "3.3.0"
 	},
-	"packageManager": "yarn@3.2.4"
+	"packageManager": "yarn@3.3.0"
 }
