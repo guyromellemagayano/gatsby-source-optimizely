@@ -12,8 +12,6 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 ![GitHub contributors](https://img.shields.io/github/contributors/Epic-Design-Labs/gatsby-source-optimizely)
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/Epic-Design-Labs/gatsby-source-optimizely)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/y/Epic-Design-Labs/gatsby-source-optimizely)
-![npms.io (final)](https://img.shields.io/npms-io/maintenance-score/@epicdesignlabs/gatsby-source-optimizely)
-![npms.io (final)](https://img.shields.io/npms-io/quality-score/@epicdesignlabs/gatsby-source-optimizely)
 
 ## Features
 
@@ -21,7 +19,8 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 - Support for multiple, additional custom headers
 - Support for custom request timeout in all `optimizely/episerver` API requests
 - Support for data caching on subsequent `gatsby` source plugin runs
-- Support for throttling and debouncing `optimizely/episerver` API requests
+- Support for request timeouts in all `optimizely/episerver` API requests
+- Support for throttling, debouncing, and adjusting the number of concurrent `optimizely/episerver` API requests
 - Add support for `expanded` data on some content blocks: `images`, `dynamicStyles`, `items`, `form` key fields are currently supported with more to come in the future
 
 ## Installation and Setup
@@ -118,13 +117,13 @@ options: {
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `120000` _(120 seconds)_.
+**Default:** `10000` _(10 seconds)_.
 
 ```javascript
 options: {
 	// ...
 
-	request_timeout: 120000;
+	request_timeout: 10000;
 }
 ```
 
@@ -132,13 +131,13 @@ options: {
 
 Set a custom request throttling interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `3000`.
+**Default:** `1000`.
 
 ```javascript
 options: {
 	// ...
 
-	request_throttle_interval: 3000;
+	request_throttle_interval: 1000;
 }
 ```
 
@@ -146,13 +145,27 @@ options: {
 
 Set a custom request debouncing interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `3000`.
+**Default:** `1000`.
 
 ```javascript
 options: {
 	// ...
 
-	request_debounce_interval: 3000;
+	request_debounce_interval: 1000;
+}
+```
+
+### Request Concurrency
+
+Set a custom request concurrency for the Optimizely/Episerver API requests.
+
+**Default:** `50`.
+
+```javascript
+options: {
+	// ...
+
+	request_concurrency: 50;
 }
 ```
 
