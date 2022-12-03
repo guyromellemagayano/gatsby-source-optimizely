@@ -69,7 +69,7 @@ export const convertStringToNumber = (e) => (!isEmpty(e) ? _.toNumber(e) : e);
  * @param {String} e
  * @returns {boolean} Boolean
  */
-export const convertStringToBoolean = (e) => (!isEmpty(e) ? _.e === "true" : e);
+export const convertStringToBoolean = (e) => (!isEmpty(e) ? e === "true" : e);
 
 /**
  * @description Convert string to array
@@ -83,14 +83,14 @@ export const convertStringToArray = (e) => (!isEmpty(e) ? _.toArray(e) : e);
  * @param {String} e
  * @returns {object} Object
  */
-export const convertStringToObject = (e) => (!isEmpty(e) ? _.JSON.parse(e) : e);
+export const convertStringToObject = (e) => (!isEmpty(e) ? JSON.parse(e) : e);
 
 /**
  * @description Convert object to string
  * @param {object} e
  * @returns {String} String
  */
-export const convertObjectToString = (e) => (!isEmpty(e) ? _.JSON.stringify(e) : e);
+export const convertObjectToString = (e) => (!isEmpty(e) ? JSON.stringify(e) : e);
 
 /**
  * @description Convert array to string
