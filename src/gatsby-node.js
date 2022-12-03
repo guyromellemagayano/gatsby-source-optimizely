@@ -1,42 +1,46 @@
 "use strict";
 
 import crypto from "crypto";
-import { ACCESS_CONTROL_ALLOW_CREDENTIALS, ACCESS_CONTROL_ALLOW_HEADERS, CONTENT_ENDPOINT, CORS_ORIGIN, REQUEST_DEBOUNCE_INTERVAL, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT, REQUEST_URL_SLUG } from "./constants";
-import Auth from "./utils/auth";
+import {
+	ACCESS_CONTROL_ALLOW_CREDENTIALS,
+	ACCESS_CONTROL_ALLOW_HEADERS,
+	AUTH_CLIENT_ID,
+	AUTH_GRANT_TYPE,
+	AUTH_HEADERS,
+	CORS_ORIGIN,
+	REQUEST_CONCURRENCY,
+	REQUEST_DEBOUNCE_INTERVAL,
+	REQUEST_ENDPOINTS,
+	REQUEST_RESPONSE_TYPE,
+	REQUEST_THROTTLE_INTERVAL,
+	REQUEST_TIMEOUT
+} from "./constants";
+import { Optimizely } from "./libs/optimizely";
 import { convertObjectToString, convertStringToLowercase } from "./utils/convertValues";
-import { Optimizely } from "./utils/optimizely";
 
 /**
  * @description Source nodes from cache
  * @param {Object} cache
  * @returns {Promise<void>} Cache promise
  */
-const handleSourceNodesFromCache = async (cache = null, helpers = null) =>
-	await Promise.allSettled(
-		cache?.map((result) => {
-			const { nodeName = null, data = null } = result;
+const handleSourceNodesFromCache = async (cache = null, helpers = {}) =>
+	cache && Array.isArray(cache) && cache?.length > 0
+		? await Promise.allSettled(
+				cache.map((result) => {
+					const { nodeName = "", data = null } = result;
 
-			return data && Array.isArray(data) && data.length > 0
-				? data.map(async (item) => {
-						if (item && Array.isArray(item) && item.length > 0) {
-							item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum?.contentLink?.url)));
-						} else await handleCreateNodeFromData(item, nodeName, helpers, convertStringToLowercase(item?.contentLink?.url));
-				  })
-				: result;
-		}) || null
-	)
-		.then((res) =>
-			Promise.resolve(() => {
-				console.info(`[NODE] Cache (OK)`);
-				return res;
-			})
-		)
-		.catch((err) =>
-			Promise.reject(() => {
-				console.error("[NODE] Cache (FAIL)", err.message);
-				throw err;
-			})
-		);
+					return data && Array.isArray(data) && data.length > 0 && typeof nodeName === "string" && nodeName?.length > 0
+						? data.map(async (item) =>
+								item && Array.isArray(item) && item.length > 0
+									? item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, convertStringToLowercase(datum?.contentLink?.url)))
+									: await handleCreateNodeFromData(item, nodeName, helpers, convertStringToLowercase(item?.contentLink?.url))
+						  )
+						: null;
+				})
+		  )
+				.then((res) => res)
+				.catch((err) => err)
+		: null;
 
 /**
  * @description Create a node from the data
@@ -46,10 +50,12 @@ const handleSourceNodesFromCache = async (cache = null, helpers = null) =>
  * @param {string} endpoint
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = async (item = null, nodeType = null, helpers = null, endpoint = null) => {
+const handleCreateNodeFromData = async (item = null, nodeType = "", helpers = {}, endpoint = "") => {
 	const { createNode, createNodeId, createContentDigest } = helpers;
 
-	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0 && typeof endpoint === "string" && endpoint.length > 0) {
+	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0 && typeof endpoint === "string" && endpoint?.length > 0) {
+		const stringifiedItem = convertObjectToString(item);
+
 		const nodeMetadata = {
 			...item,
 			id: createNodeId(`${nodeType}-${endpoint}`),
@@ -57,26 +63,22 @@ const handleCreateNodeFromData = async (item = null, nodeType = null, helpers = 
 			children: [],
 			internal: {
 				type: nodeType,
-				content: convertObjectToString(item),
-				contentDigest: createContentDigest(convertObjectToString(item))
+				content: stringifiedItem,
+				contentDigest: createContentDigest(stringifiedItem)
 			}
 		};
 
-		const node = Object.assign({}, item, nodeMetadata);
+		const node = { ...item, ...nodeMetadata };
 
 		await createNode(node)
-			.then(() =>
-				Promise.resolve(() => {
-					console.info(`[NODE] ${endpoint} - ${nodeType} (OK)`);
-					return node;
-				})
-			)
-			.catch((err) =>
-				Promise.reject(() => {
-					console.error(`[NODE] ${endpoint} - ${nodeType} (FAIL)`, err.message);
-					throw err;
-				})
-			);
+			.then(() => {
+				console.info(`[NODE] ${endpoint} - ${nodeType} (OK)`);
+				Promise.resolve(node);
+			})
+			.catch((err) => {
+				console.error(`[NODE] ${endpoint} - ${nodeType} (FAIL) - ${err.message}`);
+				Promise.reject((err) => err);
+			});
 
 		return node;
 	}
@@ -129,7 +131,8 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 		response_type: Joi.string().default("json").description("The response type to use"),
 		request_timeout: Joi.number().default(REQUEST_TIMEOUT).description("The request timeout to use in milliseconds"),
 		request_throttle_interval: Joi.number().default(REQUEST_THROTTLE_INTERVAL).description("The request throttle interval to use in milliseconds"),
-		request_debounce_interval: Joi.number().default(REQUEST_DEBOUNCE_INTERVAL).description("The request debounce interval to use in milliseconds")
+		request_debounce_interval: Joi.number().default(REQUEST_DEBOUNCE_INTERVAL).description("The request debounce interval to use in milliseconds"),
+		request_concurrency: Joi.number().default(REQUEST_CONCURRENCY).description("The maximum amount of concurrent requests to make at a given time")
 	});
 
 /**
@@ -149,281 +152,107 @@ exports.onPreInit = () => console.info("@epicdesignlabs/gatsby-source-optimizely
 exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
-		auth: { site_url = null, username = null, password = null, grant_type = "password", client_id = "Default", headers = {} },
-		endpoints = null,
-		response_type = "json",
+		auth: { site_url = null, username = null, password = null, grant_type = AUTH_GRANT_TYPE, client_id = AUTH_CLIENT_ID, headers = AUTH_HEADERS } = {},
+		endpoints = REQUEST_ENDPOINTS,
+		response_type = REQUEST_RESPONSE_TYPE,
 		request_timeout = REQUEST_TIMEOUT,
 		request_throttle_interval = REQUEST_THROTTLE_INTERVAL,
-		request_debounce_interval = REQUEST_DEBOUNCE_INTERVAL
+		request_debounce_interval = REQUEST_DEBOUNCE_INTERVAL,
+		request_concurrency = REQUEST_CONCURRENCY
 	} = pluginOptions;
 
 	// Prepare node sourcing helpers
-	const helpers = Object.assign({}, actions, {
+	const helpers = {
+		...actions,
 		createContentDigest,
 		createNodeId
-	});
+	};
 
 	// Store the response from the Optimizely/Episerver API in the cache
 	const cacheKey = crypto.createHash("sha256").update(JSON.stringify(pluginOptions)).digest("hex");
+	const dataPromises = [];
+
 	let sourceData = await cache.get(cacheKey);
 
-	// If the data is not cached, fetch it from the Optimizely/Episerver API
-	if (!sourceData) {
-		console.warn(`Cache is empty. Fetching fresh data from the Optimizely/Episerver API...`);
+	// Create a new Optimizely instance
+	const optimizely = new Optimizely({
+		site_url,
+		response_type,
+		headers: {
+			...headers,
+			"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
+			"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
+			"Access-Control-Allow-Origin": CORS_ORIGIN
+		},
+		request_timeout,
+		request_throttle_interval,
+		request_debounce_interval,
+		request_concurrency,
+		username,
+		password,
+		grant_type,
+		client_id
+	});
 
-		// Authenticate with the Optimizely/Episerver
-		const auth = new Auth({ site_url, username, password, grant_type, client_id, response_type, request_timeout });
+	// Authenticate with the Optimizely/Episerver
+	const auth = await optimizely.authenticate();
 
-		const authData = await auth.post();
+	console.log(auth);
 
-		// Display the auth data
-		authData?.access_token ? console.info(`[TOKEN] ${authData.access_token} - (OK)`) : console.error(`[TOKEN] ${authData.access_token} - (FAIL)`);
+	// Get the endpoints from the Optimizely/Episerver site and store as promises
+	// for (const [nodeName, endpoint] of Object.entries(endpoints)) {
+	// 	try {
+	// 		const url = site_url + endpoint;
+	// 		const { data: endpointData } = await optimizely.get({
+	// 			url,
+	// 			headers: {
+	// 				...headers,
+	// 				"Authorization": `Bearer ${auth?.access_token}`,
+	// 				"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
+	// 			}
+	// 		});
 
-		// Create a new Optimizely instance
-		const optimizely = new Optimizely({
-			site_url,
-			response_type,
-			headers: Object.assign(headers, {
-				"Authorization": `Bearer ${authData.access_token}`,
-				"Access-Control-Allow-Headers": ACCESS_CONTROL_ALLOW_HEADERS,
-				"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS,
-				"Access-Control-Allow-Origin": CORS_ORIGIN
-			}),
-			request_timeout,
-			request_throttle_interval,
-			request_debounce_interval
-		});
+	// 		dataPromises.push({
+	// 			nodeName,
+	// 			data: endpointData || null
+	// 		});
+	// 	} catch (err) {
+	// 		console.error(`[GET] ${site_url + endpoint} (${err.status + " " + err.statusText})`);
+	// 		return Promise.reject(err);
+	// 	}
+	// }
 
-		// Handle expanded keys and their values
-		const expandKeyValues = async (items, nodeName, endpoint) => {
-			const tempItems = [];
+	// Store the data in the cache
+	// sourceData = dataPromises?.length > 0 ? dataPromises : sourceData;
 
-			if (items && Array.isArray(items) && items?.length > 0) {
-				items.map(async (item = null) => {
-					const tempItem = Object.assign({}, item);
+	// Cache the data
+	// await cache
+	// 	.set(cacheKey, sourceData)
+	// 	.then(async () => {
+	// 		// If the data is cached, display a success message
+	// 		console.info(`[CACHE] ${cacheKey} (OK) - ${sourceData?.length || 0} items`);
 
-					if (tempItem?.contentLink?.id && typeof tempItem?.contentLink?.id === "number") {
-						tempItems.push(await optimizely.request(`${CONTENT_ENDPOINT + tempItem.contentLink.id + "?expand=*"}`, nodeName, "get"));
-					}
+	// 		// If the data is cached, resolve the promise
+	// 		return Promise.resolve(sourceData);
+	// 	})
+	// 	.catch((err) => {
+	// 		// If the data is not cached, display an error message
+	// 		console.error(`[CACHE] ${cacheKey} - (FAIL) - ${err.message}`);
+	// 		return Promise.reject(err);
+	// 	});
 
-					return tempItem;
-				});
-			} else if (items && Object.prototype.toString.call(items) === "[object Object]" && Object.keys(items).length > 0) {
-				const tempItem = Object.assign({}, items);
+	// Create nodes from the cached data
+	// sourceData?.map(
+	// 	({ nodeName = "", data = null }) =>
+	// 		data?.map(async (item) =>
+	// 			item && Array.isArray(item) && item.length > 0
+	// 				? await Promise.allSettled(item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, datum.contentLink.url)))
+	// 				: await handleCreateNodeFromData(item, nodeName, helpers, item.contentLink.url)
+	// 		) || null
+	// ) || null;
 
-				if (tempItem?.contentLink?.id && typeof tempItem?.contentLink?.id === "number") {
-					tempItems.push(await optimizely.request(`${CONTENT_ENDPOINT + tempItem.contentLink.id + "?expand=*"}`, nodeName, "get"));
-				}
-
-				return tempItem;
-			} else {
-				return items;
-			}
-
-			await Promise.allSettled(tempItems)
-				.then((res) =>
-					Promise.resolve(
-						res && Array.isArray(res) && res?.length > 0
-							? res.map(({ value = null }, index) => {
-									const { data = null } = value;
-									const updatedValue = { ...items[index], ...data };
-
-									console.info(`[DATA] ${site_url + REQUEST_URL_SLUG + endpoint} - ${nodeName} - (OK)`);
-
-									return updatedValue;
-							  })
-							: res
-					)
-				)
-				.catch((err) =>
-					Promise.reject(() => {
-						console.error(`[DATA] ${site_url + REQUEST_URL_SLUG + endpoint} - ${nodeName} - (FAIL)`, err.message);
-						throw err;
-					})
-				);
-		};
-
-		// Handle expanded content blocks
-		const expandContentBlocks = async (blocks, nodeName, endpoint) => {
-			const tempBlocks = [];
-
-			if (blocks && Array.isArray(blocks) && blocks?.length > 0) {
-				await Promise.allSettled(
-					blocks.map(async (block) => {
-						const tempBlock = Object.assign({}, block);
-
-						const { contentLink: { expanded: { dynamicStyles = null, items = null, images = null, form = null } = null } = null } = tempBlock;
-
-						if (dynamicStyles) {
-							const dynamicStylesPromise = await expandKeyValues(dynamicStyles, nodeName, endpoint);
-							tempBlocks.push(dynamicStylesPromise);
-						}
-
-						if (items) {
-							const itemsPromise = await expandKeyValues(items, nodeName, endpoint);
-							tempBlocks.push(itemsPromise);
-						}
-
-						if (images) {
-							const imagesPromise = await expandKeyValues(images, nodeName, endpoint);
-							tempBlocks.push(imagesPromise);
-						}
-
-						if (form) {
-							const formPromise = await expandKeyValues(form, nodeName, endpoint);
-							tempBlocks.push(formPromise);
-						}
-
-						return tempBlock;
-					})
-				)
-					.then((res) => Promise.resolve(res))
-					.catch((err) => Promise.reject(err));
-			} else if (blocks && Object.prototype.toString.call(blocks) === "[object Object]" && Object.keys(blocks).length > 0) {
-				const tempBlock = Object.assign({}, blocks);
-
-				const { contentLink: { expanded: { dynamicStyles = null, items = null, images = null, form = null } = null } = null } = tempBlock;
-
-				if (dynamicStyles) {
-					const dynamicStylesPromise = await expandKeyValues(dynamicStyles, nodeName, endpoint);
-					tempBlocks.push(dynamicStylesPromise);
-				}
-
-				if (items) {
-					const itemsPromise = await expandKeyValues(items, nodeName, endpoint);
-					tempBlocks.push(itemsPromise);
-				}
-
-				if (images) {
-					const imagesPromise = await expandKeyValues(images, nodeName, endpoint);
-					tempBlocks.push(imagesPromise);
-				}
-
-				if (form) {
-					const formPromise = await expandKeyValues(form, nodeName, endpoint);
-					tempBlocks.push(formPromise);
-				}
-
-				return tempBlock;
-			} else {
-				return blocks;
-			}
-
-			await Promise.allSettled(tempBlocks)
-				.then((res) =>
-					res && Array.isArray(res) && res?.length > 0
-						? res.map(({ value = null }, index) => {
-								const { data = null } = value;
-								const updatedValue = { ...blocks[index], ...data };
-
-								console.info(`[EXPAND] ${endpoint} - ${nodeName} - (OK)`);
-
-								return updatedValue;
-						  })
-						: res
-				)
-				.catch((err) =>
-					Promise.reject(() => {
-						console.error(`[EXPAND] ${endpoint} - ${nodeName} - (FAIL)`, err.message);
-						throw err;
-					})
-				);
-		};
-
-		const data = [];
-
-		// Get the endpoints from the Optimizely/Episerver site and store as promises
-		for (const [nodeName, endpoint] of Object.entries(endpoints)) {
-			const url = site_url + REQUEST_URL_SLUG + endpoint;
-
-			try {
-				const res = await optimizely.request(endpoint, nodeName, "get");
-
-				if (res && Array.isArray(res) && res?.length > 0) {
-					await Promise.allSettled(
-						res.map(async (item) => {
-							// Shallow copy of the item
-							const tempItem = Object.assign({}, item);
-
-							// Check if the item has a content block properties
-							const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
-
-							// If the item has a content block property, fetch the content block data and expand its properties
-							if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
-								const expandedContentBlocks = await expandContentBlocks(contentBlocks, nodeName, endpoint);
-								tempItem.contentBlocks = expandedContentBlocks;
-							}
-
-							// If the item has a content block property, fetch the content block data and expand its properties
-							if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
-								const expandedContentBlocks = await expandContentBlocks(contentBlocksTop, nodeName, endpoint);
-								tempItem.contentBlocksTop = expandedContentBlocks;
-							}
-
-							// If the item has a content block property, fetch the content block data and expand its properties
-							if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
-								const expandedContentBlocks = await expandContentBlocks(contentBlocksBottom, nodeName, endpoint);
-								tempItem.contentBlocksBottom = expandedContentBlocks;
-							}
-
-							return tempItem;
-						})
-					)
-						.then((res) => {
-							data.push({ [nodeName]: res });
-							console.info(`[EXPAND] ${url} - ${nodeName} - (OK)`);
-							return res;
-						})
-						.catch((err) => {
-							console.error(`[EXPAND] ${url} - ${nodeName} - (FAIL)`, err.message);
-							throw err;
-						});
-				} else {
-					try {
-						// Shallow copy of the item
-						const tempItem = Object.assign({}, res);
-
-						// Check if the item has a content block properties
-						const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
-
-						// If the item has a content block property, fetch the content block data and expand its properties
-						if (contentBlocks && Array.isArray(contentBlocks) && contentBlocks?.length > 0) {
-							const expandedContentBlocks = await expandContentBlocks(contentBlocks, nodeName, endpoint);
-							tempItem.contentBlocks = expandedContentBlocks;
-						}
-
-						// If the item has a content block property, fetch the content block data and expand its properties
-						if (contentBlocksTop && Array.isArray(contentBlocksTop) && contentBlocksTop?.length > 0) {
-							const expandedContentBlocks = await expandContentBlocks(contentBlocksTop, nodeName, endpoint);
-							tempItem.contentBlocksTop = expandedContentBlocks;
-						}
-
-						// If the item has a content block property, fetch the content block data and expand its properties
-						if (contentBlocksBottom && Array.isArray(contentBlocksBottom) && contentBlocksBottom?.length > 0) {
-							const expandedContentBlocks = await expandContentBlocks(contentBlocksBottom, nodeName, endpoint);
-							tempItem.contentBlocksBottom = expandedContentBlocks;
-						}
-
-						data.push({ [nodeName]: tempItem });
-						console.info(`[EXPAND] ${url} - ${nodeName} - (OK)`);
-						return tempItem;
-					} catch (err) {
-						console.error(`[EXPAND] ${url} - ${nodeName} - (FAIL)`, err.message);
-						throw err;
-					}
-				}
-			} catch (err) {
-				console.error(`[ENDPOINTS] ${url} - ${nodeName} - (FAIL)`, err.message);
-				throw err;
-			}
-		}
-	} else {
-		// If the data is cached, display a success message
-		console.info(`[CACHE] Detected with hash key ${cacheKey} containing ${sourceData.length || 0} items`);
-
-		// Create nodes from the cached data
-		await handleSourceNodesFromCache(sourceData, helpers);
-	}
+	// Resolve the promise
+	return Promise.resolve(sourceData);
 };
 
 exports.onPostBuild = async ({ reporter, basePath, pathPrefix }) => reporter.info(`@epicdesignlabs/gatsby-source-optimizely task processing complete with current site built with "basePath": ${basePath} and "pathPrefix": ${pathPrefix}`);
