@@ -19,7 +19,7 @@ export const ACCESS_CONTROL_ALLOW_CREDENTIALS = true;
 export const CORS_ORIGIN = "*";
 
 // Endpoints
-export const CONTENT_ENDPOINT = "/v2.0/content?references=";
+export const CONTENT_ENDPOINT = REQUEST_URL_SLUG + "/v2.0/content/";
 
 // Auth
 export const AUTH_REQUEST_CONTENT_TYPE_HEADER = "application/x-www-form-urlencoded";
