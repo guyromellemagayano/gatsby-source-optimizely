@@ -131,13 +131,13 @@ options: {
 
 Set a custom request throttling interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `1000`.
+**Default:** `500`.
 
 ```javascript
 options: {
 	// ...
 
-	request_throttle_interval: 1000;
+	request_throttle_interval: 500;
 }
 ```
 
@@ -145,13 +145,13 @@ options: {
 
 Set a custom request debouncing interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `1000`.
+**Default:** `500`.
 
 ```javascript
 options: {
 	// ...
 
-	request_debounce_interval: 1000;
+	request_debounce_interval: 500;
 }
 ```
 
