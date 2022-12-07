@@ -98,12 +98,5 @@
 			"git add"
 		]
 	},
-	"engines": {
-		"node": ">=16.15.1"
-	},
-	"volta": {
-		"node": "16.18.1",
-		"yarn": "3.3.0"
-	},
 	"packageManager": "yarn@3.3.0"
 }
