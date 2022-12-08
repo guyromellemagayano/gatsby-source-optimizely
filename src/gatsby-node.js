@@ -16,38 +16,9 @@ import {
 	REQUEST_TIMEOUT
 } from "./constants";
 import { Optimizely } from "./libs/optimizely";
-import { convertObjectToString, convertStringToLowercase } from "./utils/convertValues";
+import { convertObjectToString } from "./utils/convertValues";
 import { isEqual } from "./utils/isEqual";
-import { isEmpty } from "./utils/typeCheck";
-
-/**
- * @description Source nodes from cache
- * @param {Object} cache
- * @returns {Promise<void>} Cache promise
- */
-const handleSourceNodesFromCache = async (cache = null, helpers = {}) => {
-	if (!isEmpty(cache)) {
-		await Promise.allSettled(
-			cache.map(async (result) => {
-				const { nodeName = "", data = null } = result;
-
-				await handleCreateNodeFromData(data, nodeName, helpers, convertStringToLowercase(data?.contentLink?.url));
-			})
-		)
-			.then((res) => {
-				// Send log message to console if node creation was successful
-				console.info(`@epicdesignlabs/gatsby-source-optimizely: Successfully created nodes from ${cache?.length} endpoint(s)`);
-
-				return Promise.resolve(res);
-			})
-			.catch((err) => {
-				// Send log message to console if node creation failed
-				console.error(`@epicdesignlabs/gatsby-source-optimizely: Failed to create nodes from ${cache?.length} endpoint(s) - ${err.message}`);
-
-				return Promise.reject(err);
-			});
-	}
-};
+import { isArrayType, isEmpty, isStringType } from "./utils/typeCheck";
 
 /**
  * @description Create a node from the data
@@ -60,7 +31,9 @@ const handleSourceNodesFromCache = async (cache = null, helpers = {}) => {
 const handleCreateNodeFromData = async (item = null, nodeType = "", helpers = {}, endpoint = "") => {
 	const { createNode, createNodeId, createContentDigest } = helpers;
 
-	if (item && Object.prototype.toString.call(item) === "[object Object]" && Object.keys(item)?.length > 0 && typeof endpoint === "string" && endpoint?.length > 0) {
+	console.warn(`[NODE] ${endpoint} - ${nodeType} - (START)`);
+
+	if (!isEmpty(item) && !isEmpty(nodeType)) {
 		const stringifiedItem = convertObjectToString(item);
 
 		const nodeMetadata = {
@@ -79,11 +52,11 @@ const handleCreateNodeFromData = async (item = null, nodeType = "", helpers = {}
 
 		await createNode(node)
 			.then(() => {
-				console.info(`[NODE] ${endpoint} - ${nodeType} (OK)`);
+				console.info(`[NODE] ${endpoint} - ${nodeType} - (OK)`);
 				Promise.resolve(node);
 			})
 			.catch((err) => {
-				console.error(`[NODE] ${endpoint} - ${nodeType} (FAIL) - ${err.message}`);
+				console.error(`[NODE] ${endpoint} - ${nodeType} (FAIL) - ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 				Promise.reject((err) => err);
 			});
 
@@ -225,7 +198,8 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 
 				dataPromises.push({
 					nodeName,
-					data: results || null
+					data: results || null,
+					endpoint
 				});
 			} catch (err) {
 				// Send log message to console if an error occurred
@@ -240,32 +214,40 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 			// Compare the data in the cache with the data from the Optimizely/Episerver site
 			if (!isEqual(sourceData, dataPromises)) {
 				// Store the data in the cache
-				sourceData = dataPromises || sourceData;
-
-				// If the source data is different from the cached data, display a success message
-				console.info(`[CACHE] ${cacheKey} (OK) - ${sourceData?.length || 0} items`);
+				sourceData = dataPromises;
 
 				// Cache the data
-				await cache.set(cacheKey, sourceData);
+				await cache
+					.set(cacheKey, sourceData)
+					.then(() => {
+						// If the source data is different from the cached data, display a success message
+						console.info(`[CACHE] ${cacheKey} (OK) - ${sourceData?.length || 0} items`);
+
+						// Create nodes from the data
+						sourceData?.map(async ({ nodeName = "", data = null, endpoint = "" }) => {
+							if (!isEmpty(data) && isArrayType(data) && !isEmpty(nodeName) && isStringType(nodeName)) {
+								data?.map(async (item) => {
+									if (!isEmpty(item) && isArrayType(item)) {
+										item?.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint));
+									} else {
+										await handleCreateNodeFromData(item, nodeName, helpers, item?.contentLink?.url || site_url + endpoint);
+									}
+								});
+							} else {
+								await handleCreateNodeFromData(data, nodeName, helpers, data?.contentLink?.url || site_url + endpoint);
+							}
+						});
+					})
+					.catch((err) => {
+						console.error(`[CACHE] ${cacheKey} (${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."})`);
+
+						// Reject the promise
+						return Promise.reject(err);
+					});
 			} else {
 				// If the source data is the same as the cached data, display a warning message
-				console.warn(`[CACHE] Cache with key ${cacheKey} was detected but no changes were made. Proceeding with node creation using cached data.`);
+				console.warn(`[CACHE] Cache with key ${cacheKey} was detected but no changes were made. Skipping node creation...`);
 			}
-
-			console.log(sourceData);
-
-			// Create nodes from the data
-			sourceData?.map(({ nodeName = "", data = null }) =>
-				data?.map(async (item) =>
-					item && Array.isArray(item) && item.length > 0
-						? await Promise.allSettled(item.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, datum.contentLink.url)))
-						: await handleCreateNodeFromData(item, nodeName, helpers, item.contentLink.url)
-				)
-			);
-		} else {
-			console.error(`@epicdesignlabs/gatsby-source-optimizely: No data was sourced from ${site_url}`);
-
-			return Promise.reject();
 		}
 	} else {
 		console.error(`[AUTH] ${site_url} (${auth?.error_description})`);

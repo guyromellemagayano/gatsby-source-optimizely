@@ -46,7 +46,8 @@ export class Optimizely {
 			request_timeout: this.request_timeout,
 			request_throttle_interval: this.request_throttle_interval,
 			request_debounce_interval: this.request_debounce_interval,
-			request_max_count: this.request_max_count
+			request_max_count: this.request_max_count,
+			request_concurrency: this.request_concurrency
 		});
 
 		// Run request
@@ -116,6 +117,7 @@ export class Optimizely {
 							if (!isEmpty(dynamicStyles)) {
 								const expandedDynamicStyles = await handleExpandKeyValues(dynamicStyles);
 
+								delete tempBlock.contentLink.expanded.dynamicStyles;
 								tempBlock.contentLink.expanded.dynamicStyles = expandedDynamicStyles;
 
 								// Compare the expanded block with the original block
@@ -129,6 +131,7 @@ export class Optimizely {
 							if (!isEmpty(items)) {
 								const expandedItems = await handleExpandKeyValues(items);
 
+								delete tempBlock.contentLink.expanded.items;
 								tempBlock.contentLink.expanded.items = expandedItems;
 
 								// Compare the expanded block with the original block
@@ -142,6 +145,7 @@ export class Optimizely {
 							if (!isEmpty(images)) {
 								const expandedImages = await handleExpandKeyValues(images);
 
+								delete tempBlock.contentLink.expanded.images;
 								tempBlock.contentLink.expanded.images = expandedImages;
 
 								// Compare the expanded block with the original block
@@ -155,6 +159,7 @@ export class Optimizely {
 							if (!isEmpty(form)) {
 								const expandedForm = await handleExpandKeyValues(form);
 
+								delete tempBlock.contentLink.expanded.form;
 								tempBlock.contentLink.expanded.form = expandedForm;
 
 								// Compare the expanded block with the original block
@@ -194,7 +199,7 @@ export class Optimizely {
 							const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
 
 							// If the item has a content blocks property, fetch the content blocks data and expand its properties
-							if (!isEmpty(contentBlocks)) {
+							if (isArrayType(contentBlocks) && !isEmpty(contentBlocks)) {
 								const expandedContentBlocks = await handleExpandContentBlocks(contentBlocks);
 
 								// Update the content blocks property with the expanded data
@@ -208,7 +213,7 @@ export class Optimizely {
 							}
 
 							// If the item has a content blocks top property, fetch the content blocks data and expand its properties
-							if (!isEmpty(contentBlocksTop)) {
+							if (isArrayType(contentBlocksTop) && !isEmpty(contentBlocksTop)) {
 								const expandedContentBlocksTop = await handleExpandContentBlocks(contentBlocksTop);
 
 								// Update the content blocks top property with the expanded data
@@ -222,7 +227,7 @@ export class Optimizely {
 							}
 
 							// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
-							if (!isEmpty(contentBlocksBottom)) {
+							if (isArrayType(contentBlocksBottom) && !isEmpty(contentBlocksBottom)) {
 								const expandedContentBlocksBottom = await handleExpandContentBlocks(contentBlocksBottom);
 
 								// Update the content blocks bottom property with the expanded data
@@ -259,7 +264,7 @@ export class Optimizely {
 					const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
 
 					// If the item has a content blocks property, fetch the content blocks data and expand its properties
-					if (!isEmpty(contentBlocks)) {
+					if (isArrayType(contentBlocks) && !isEmpty(contentBlocks)) {
 						const expandedContentBlocks = handleExpandContentBlocks(contentBlocks);
 
 						// Update the content blocks property with the expanded data
@@ -273,7 +278,7 @@ export class Optimizely {
 					}
 
 					// If the item has a content blocks top property, fetch the content blocks data and expand its properties
-					if (!isEmpty(contentBlocksTop)) {
+					if (isArrayType(contentBlocksTop) && !isEmpty(contentBlocksTop)) {
 						const expandedContentBlocksTop = handleExpandContentBlocks(contentBlocksTop);
 
 						// Update the content blocks property with the expanded data
@@ -287,7 +292,7 @@ export class Optimizely {
 					}
 
 					// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
-					if (!isEmpty(contentBlocksBottom)) {
+					if (isArrayType(contentBlocksBottom) && !isEmpty(contentBlocksBottom)) {
 						const expandedContentBlocksBottom = handleExpandContentBlocks(contentBlocksBottom);
 
 						// Update the content blocks property with the expanded data

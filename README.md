@@ -57,10 +57,11 @@ module.exports = {
 					client_id: process.env.OPTMIZELY_API_CLIENT_ID, // The client ID of the Optimizely/Episerver API user. Default is "Default"
 				},
 				endpoints: {
-					OptimizelyAboutUsDesignersPageContentChildren: "/v2.0/content/14675/children?expand=*",
-					OptimizelyAboutUsPageContentChildren: "/v2.0/content/14110/children?expand=*",
-					OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/v2.0/content/14129/children?expand=*",
-					OptimizelyBedAccessoriesLegsPageContentChildren: "/v2.0/content/14131/children?expand=*",
+					OptimizelyLocations: "/api/locations?lang=en-us&market=US",
+					OptimizelyAboutUsDesignersPageContentChildren: "/api/episerver/v2.0/content/14675/children?expand=*",
+					OptimizelyAboutUsPageContentChildren: "/api/episerver/v2.0/content/14110/children?expand=*",
+					OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/api/episerver/v2.0/content/14129/children?expand=*",
+					OptimizelyBedAccessoriesLegsPageContentChildren: "/api/episerver/v2.0/content/14131/children?expand=*",
 				},
 			},
 		},
@@ -74,18 +75,21 @@ module.exports = {
 
 Add a single or multiple `endpoints`.
 
+> **Note**: The `endpoints` should start with `/api/**/*` as the base URL will be added automatically via your `options.auth.site_url` value.
+
 ```javascript
 options: {
 	// ...
 
 	endpoints: {
 		// Single endpoint
-		OptimizelyAboutUsDesignersPageContentChildren: "/v2.0/content/14675/children?expand=*",
+		OptimizelyAboutUsDesignersPageContentChildren: "/api/episerver/v2.0/content/14675/children?expand=*",
 
 		// Multiple endpoints
-		OptimizelyAboutUsPageContentChildren: "/v2.0/content/14110/children?expand=*",
-		OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/v2.0/content/14129/children?expand=*",
-		OptimizelyBedAccessoriesLegsPageContentChildren: "/v2.0/content/14131/children?expand=*",
+		OptimizelyLocations: "/api/locations?lang=en-us&market=US",
+		OptimizelyAboutUsPageContentChildren: "/api/episerver/v2.0/content/14110/children?expand=*",
+		OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/api/episerver/v2.0/content/14129/children?expand=*",
+		OptimizelyBedAccessoriesLegsPageContentChildren: "/api/episerver/v2.0/content/14131/children?expand=*",
 	}
 }
 ```
@@ -131,7 +135,7 @@ options: {
 
 Set a custom request throttling interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `500`.
+**Default:** `500` _(0.5 seconds)_.
 
 ```javascript
 options: {
@@ -145,7 +149,7 @@ options: {
 
 Set a custom request debouncing interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `500`.
+**Default:** `500` _(0.5 seconds)_.
 
 ```javascript
 options: {
@@ -178,7 +182,7 @@ options: {
 	// ...
 
 	endpoints: {
-		OptimizelyAboutUsDesignersPageContentChildren: "/v2.0/content/14675/children?expand=*",
+		OptimizelyAboutUsDesignersPageContentChildren: "/api/episerver/v2.0/content/14675/children?expand=*",
 	}
 }
 ```
