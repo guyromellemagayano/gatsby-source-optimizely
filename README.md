@@ -121,13 +121,13 @@ options: {
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `10000` _(10 seconds)_.
+**Default:** `60000` _(60 seconds)_.
 
 ```javascript
 options: {
 	// ...
 
-	request_timeout: 10000;
+	request_timeout: 60000;
 }
 ```
 
@@ -163,13 +163,13 @@ options: {
 
 Set a custom request concurrency for the Optimizely/Episerver API requests.
 
-**Default:** `50`.
+**Default:** `100`.
 
 ```javascript
 options: {
 	// ...
 
-	request_concurrency: 50;
+	request_concurrency: 100;
 }
 ```
 
