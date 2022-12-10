@@ -5,10 +5,10 @@ export const IS_PROD = process.env.NODE_ENV === "production";
 // Request
 export const REQUEST_URL_SLUG = "/api/episerver";
 export const REQUEST_ACCEPT_HEADER = "application/json";
-export const REQUEST_TIMEOUT = 10000;
+export const REQUEST_TIMEOUT = 60000;
 export const REQUEST_THROTTLE_INTERVAL = 500;
 export const REQUEST_DEBOUNCE_INTERVAL = 500;
-export const REQUEST_CONCURRENCY = 50;
+export const REQUEST_CONCURRENCY = 100;
 export const REQUEST_PENDING_COUNT = 0;
 export const REQUEST_RESPONSE_TYPE = "json";
 export const REQUEST_ENDPOINTS = [];
