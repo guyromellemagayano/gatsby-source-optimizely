@@ -1,6 +1,7 @@
+/* eslint-disable no-unused-vars */
 "use strict";
 
-import crypto from "crypto";
+import { createRemoteFileNode } from "gatsby-source-filesystem";
 import {
 	ACCESS_CONTROL_ALLOW_CREDENTIALS,
 	ACCESS_CONTROL_ALLOW_HEADERS,
@@ -16,9 +17,30 @@ import {
 	REQUEST_TIMEOUT
 } from "./constants";
 import { Optimizely } from "./libs/optimizely";
-import { convertObjectToString } from "./utils/convertValues";
+import { convertObjectToString, convertStringToCamelCase } from "./utils/convertValues";
 import { isEqual } from "./utils/isEqual";
-import { isArrayType, isEmpty, isStringType } from "./utils/typeCheck";
+import { isArrayType, isEmpty, isObjectType, isStringType } from "./utils/typeCheck";
+
+/**
+ * @description Camelize keys of an object
+ * @param {Object} obj
+ * @returns {Object} Object with camelCase keys
+ */
+const handleCamelizeKeys = (obj) => {
+	if (isArrayType(obj) && !isEmpty(obj)) {
+		return obj?.map((item) => handleCamelizeKeys(item));
+	} else if (isObjectType(obj) && !isEmpty(obj)) {
+		return Object.keys(obj).reduce(
+			(result, key) => ({
+				...result,
+				[convertStringToCamelCase(key)]: handleCamelizeKeys(obj[key])
+			}),
+			{}
+		);
+	}
+
+	return obj;
+};
 
 /**
  * @description Create a node from the data
@@ -31,10 +53,12 @@ import { isArrayType, isEmpty, isStringType } from "./utils/typeCheck";
 const handleCreateNodeFromData = async (item = null, nodeType = "", helpers = {}, endpoint = "") => {
 	const { createNode, createNodeId, createContentDigest } = helpers;
 
-	console.warn(`[NODE] ${endpoint} - ${nodeType} - (START)`);
-
 	if (!isEmpty(item) && !isEmpty(nodeType)) {
-		const stringifiedItem = convertObjectToString(item);
+		const camelizedItem = handleCamelizeKeys(item);
+
+		console.log(JSON.stringify(camelizedItem, null, 2));
+
+		const stringifiedItem = convertObjectToString(camelizedItem);
 
 		const nodeMetadata = {
 			...item,
@@ -52,12 +76,14 @@ const handleCreateNodeFromData = async (item = null, nodeType = "", helpers = {}
 
 		await createNode(node)
 			.then(() => {
-				console.info(`[NODE] ${endpoint} - ${nodeType} - (OK)`);
+				console.info(`[NODE] ${node?.internal?.contentDigest} - ${nodeType} - (OK)`);
+
 				Promise.resolve(node);
 			})
 			.catch((err) => {
-				console.error(`[NODE] ${endpoint} - ${nodeType} (FAIL) - ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-				Promise.reject((err) => err);
+				console.error(`[NODE] ${node?.internal?.contentDigest} - ${nodeType} (FAIL) - ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+
+				Promise.reject(err);
 			});
 
 		return node;
@@ -129,7 +155,7 @@ exports.onPreInit = () => console.info("@epicdesignlabs/gatsby-source-optimizely
  * @param {Object} pluginOptions
  * @returns {Promise<void>} Node creation promise
  */
-exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest }, pluginOptions) => {
+exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
 		auth: { site_url = null, username = null, password = null, grant_type = AUTH_GRANT_TYPE, client_id = AUTH_CLIENT_ID, headers = AUTH_HEADERS } = {},
@@ -143,14 +169,14 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 
 	// Prepare node sourcing helpers
 	const helpers = {
-		...actions,
+		createNode,
 		createContentDigest,
 		createNodeId
 	};
 
 	// Store the response from the Optimizely/Episerver API in the cache
-	const cacheKey = crypto.createHash("sha256").update(JSON.stringify(pluginOptions)).digest("hex");
 	const dataPromises = [];
+	const cacheKey = "@epicdesignlabs/gatsby-source-optimizely";
 
 	let sourceData = await cache.get(cacheKey);
 
@@ -177,83 +203,135 @@ exports.sourceNodes = async ({ actions, cache, createNodeId, createContentDigest
 	// Authenticate with the Optimizely/Episerver
 	const auth = await optimizely.authenticate();
 
-	if (!isEmpty(auth?.access_token)) {
-		// Send log message to console if authentication was successful
-		console.info(`[AUTH] ${convertObjectToString(auth)}`);
+	try {
+		if (!isEmpty(auth?.access_token)) {
+			// Send log message to console if authentication was successful
+			console.info(`[AUTH] ${convertObjectToString(auth)}`);
 
-		// Get the endpoints from the Optimizely/Episerver site and store as promises
-		for (const [nodeName, endpoint] of Object.entries(endpoints)) {
-			try {
-				const url = site_url + endpoint;
+			// Get the endpoints from the Optimizely/Episerver site and store as promises
+			for (const [nodeName, endpoint] of Object.entries(endpoints)) {
+				try {
+					const url = site_url + endpoint;
 
-				const results = await optimizely.get({
-					url,
-					headers: {
-						...headers,
-						"Authorization": `Bearer ${auth?.access_token}`,
-						"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
-					},
-					endpoint: nodeName
-				});
-
-				dataPromises.push({
-					nodeName,
-					data: results || null,
-					endpoint
-				});
-			} catch (err) {
-				// Send log message to console if an error occurred
-				console.error(`[GET] ${site_url + endpoint} (${err.status + " " + err.statusText})`);
-
-				// Reject the promise
-				return Promise.reject(err);
-			}
-		}
-
-		if (!isEmpty(dataPromises)) {
-			// Compare the data in the cache with the data from the Optimizely/Episerver site
-			if (!isEqual(sourceData, dataPromises)) {
-				// Store the data in the cache
-				sourceData = dataPromises;
-
-				// Cache the data
-				await cache
-					.set(cacheKey, sourceData)
-					.then(() => {
-						// If the source data is different from the cached data, display a success message
-						console.info(`[CACHE] ${cacheKey} (OK) - ${sourceData?.length || 0} items`);
-
-						// Create nodes from the data
-						sourceData?.map(async ({ nodeName = "", data = null, endpoint = "" }) => {
-							if (!isEmpty(data) && isArrayType(data) && !isEmpty(nodeName) && isStringType(nodeName)) {
-								data?.map(async (item) => {
-									if (!isEmpty(item) && isArrayType(item)) {
-										item?.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint));
-									} else {
-										await handleCreateNodeFromData(item, nodeName, helpers, item?.contentLink?.url || site_url + endpoint);
-									}
-								});
-							} else {
-								await handleCreateNodeFromData(data, nodeName, helpers, data?.contentLink?.url || site_url + endpoint);
-							}
-						});
-					})
-					.catch((err) => {
-						console.error(`[CACHE] ${cacheKey} (${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."})`);
-
-						// Reject the promise
-						return Promise.reject(err);
+					const results = await optimizely.get({
+						url,
+						headers: {
+							...headers,
+							"Authorization": `Bearer ${auth?.access_token}`,
+							"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
+						},
+						endpoint: nodeName
 					});
-			} else {
-				// If the source data is the same as the cached data, display a warning message
-				console.warn(`[CACHE] Cache with key ${cacheKey} was detected but no changes were made. Skipping node creation...`);
+
+					dataPromises.push({
+						nodeName,
+						data: results || null,
+						endpoint
+					});
+				} catch (err) {
+					// Send log message to console if an error occurred
+					console.error(`[GET] ${site_url + endpoint} (${err.status + " " + err.statusText})`);
+
+					// Reject the promise
+					Promise.reject(err);
+				}
+			}
+
+			if (!isEmpty(dataPromises)) {
+				// Compare the data in the cache with the data from the Optimizely/Episerver site
+				if (!isEqual(sourceData, dataPromises)) {
+					// Store the data in the cache
+					sourceData = dataPromises;
+
+					// Cache the data
+					await cache
+						.set(cacheKey, sourceData)
+						.then(() => {
+							// If the source data is different from the cached data, display a success message
+							console.info(`[CACHE] ${cacheKey} - (OK) - ${sourceData?.length || 0} items`);
+
+							// Create nodes from the data
+							sourceData?.map(({ nodeName = "", data = null, endpoint = "" }) => {
+								if (!isEmpty(data) && isArrayType(data) && !isEmpty(nodeName) && isStringType(nodeName)) {
+									data?.map(async (item) => {
+										if (!isEmpty(item) && isArrayType(item)) {
+											item?.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint));
+										} else {
+											await handleCreateNodeFromData(item, nodeName, helpers, item?.contentLink?.url || site_url + endpoint);
+										}
+									});
+								} else {
+									const keyValues = ["Locations"];
+
+									Object.entries(data)?.map(async ([key, value]) => {
+										if (keyValues?.includes(key) && isArrayType(value) && !isEmpty(value)) {
+											value?.map(async (datum) => await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint));
+										} else {
+											await handleCreateNodeFromData(value, nodeName, helpers, value?.contentLink?.url || site_url + endpoint);
+										}
+									});
+								}
+							});
+						})
+						.catch((err) => {
+							// Send log message to console if an error occurred
+							console.error(`[CACHE] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+
+							// Reject the promise
+							return err;
+						});
+				} else {
+					// If the source data is the same as the cached data, display a warning message
+					console.warn(`[CACHE] Cache with key ${cacheKey} was detected but no changes were made. Skipping node creation...`);
+				}
 			}
 		}
-	} else {
-		console.error(`[AUTH] ${site_url} (${auth?.error_description})`);
+	} catch (err) {
+		// Send log message to console if an error occurred
+		console.error(`[AUTH] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 
-		return Promise.reject(auth);
+		// Reject the promise
+		return err;
 	}
+
+	return;
 };
 
-exports.onPostBuild = async ({ reporter, basePath, pathPrefix }) => reporter.info(`@epicdesignlabs/gatsby-source-optimizely task processing complete with current site built with "basePath": ${basePath} and "pathPrefix": ${pathPrefix}`);
+/**
+ * @description Create nodes from the data
+ * @param {Object} node
+ * @param {Object} actions
+ * @param {Function} createNodeId
+ * @param {Function} createContentDigest
+ * @param {Function} getCache
+ * @returns {Promise} Promise
+ */
+exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, createNodeId, getCache }) => {
+	if (node?.internal?.type === "OptimizelyLocations" && node?.Images?.length > 0) {
+		let fields = [];
+
+		for (let i = 0; i < node?.Images?.length; i++) {
+			const imageFileNode = await createRemoteFileNode({
+				url: node?.Images[i],
+				parentNodeId: node?.id,
+				createNode,
+				createNodeId,
+				getCache
+			});
+
+			// If the file was created, attach the new node to the parent node
+			if (isObjectType(imageFileNode) && !isEmpty(imageFileNode) && imageFileNode?.id) {
+				fields.push(imageFileNode?.id);
+			}
+		}
+
+		// If the file was created, attach the new node to the parent node
+		if (!isEmpty(fields)) {
+			createNodeField({
+				node,
+				name: "localFile___NODE",
+				value: fields
+			});
+		}
+	}
+};
