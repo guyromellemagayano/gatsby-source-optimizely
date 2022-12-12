@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import { REQUEST_ACCEPT_HEADER, REQUEST_CONCURRENCY, REQUEST_DEBOUNCE_INTERVAL, REQUEST_PENDING_COUNT, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT } from "../constants";
-import { convertStringToLowercase, convertStringToUppercase } from "../utils/convertValues";
+import { convertObjectToString, convertStringToLowercase, convertStringToUppercase } from "../utils/convertValues";
 import { debounce } from "../utils/debounce";
 import { throttle } from "../utils/throttle";
 
@@ -80,7 +80,7 @@ export class Request {
 		}),
 			(res) => {
 				// Send info message to console if request is successful
-				console.info(`[${convertStringToUppercase(method)}] ${url} - (${res.status} ${res.statusText})`);
+				console.info(`[${convertStringToUppercase(method)}] ${url} - (${res?.status} ${res?.statusText})`);
 
 				// Return response
 				return res;
@@ -100,7 +100,11 @@ export class Request {
 			this.pending_requests = Math.max(0, this.pending_requests > 0 ? this.pending_requests - 1 : 0);
 
 			// Send info message to console if request is successful
-			console.info(`[${convertStringToUppercase(method)}] ${url} - (${res.status} ${res.statusText}) (${this.pending_requests} pending ${this.pending_requests > 1 ? "requests" : "request"})`);
+			console.info(
+				`[${convertStringToUppercase(method)}] ${url} - (${res?.status} ${res?.statusText}) - (${res?.data?.length || Object.keys(res?.data)?.length || 0} ${
+					res?.data?.length === 1 || Object.keys(res?.data)?.length === 1 ? "item" : "items"
+				}) - (${this.pending_requests} pending ${this.pending_requests > 1 ? "requests" : "request"})`
+			);
 
 			// Return response
 			return res;
@@ -121,7 +125,7 @@ export class Request {
 				} else {
 					// Send log message when error is thrown
 					console.error(`[${convertStringToUppercase(method)}] ${url} - (ERROR)`);
-					console.error("\n", err.message, "\n");
+					console.error("\n", `${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`, "\n");
 				}
 
 				// Return error message
