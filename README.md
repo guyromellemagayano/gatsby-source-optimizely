@@ -15,13 +15,17 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 
 ## Features
 
-- Support for multiple `optimizely/episerver` API versions
-- Support for multiple, additional custom headers
-- Support for custom request timeout in all `optimizely/episerver` API requests
-- Support for data caching on subsequent `gatsby` source plugin runs
-- Support for request timeouts in all `optimizely/episerver` API requests
-- Support for throttling, debouncing, and adjusting the number of concurrent `optimizely/episerver` API requests
+Provide support for the following features:
+
+- Multiple `optimizely/episerver` API versions
+- Multiple, additional custom headers
+- Custom request timeout in all `optimizely/episerver` API requests
+- Data caching on subsequent `gatsby` source plugin runs
+- Request timeouts in all `optimizely/episerver` API requests
+- Throttling, debouncing, and adjusting the number of concurrent `optimizely/episerver` API requests
 - Add support for `expanded` data on some content blocks: `images`, `dynamicStyles`, `items`, `form` key fields are currently supported with more to come in the future
+- Image optimizations for `optimizely/episerver` API images
+- Type resolvers for `optimizely/episerver` API content blocks
 
 ## Installation and Setup
 
@@ -56,13 +60,30 @@ module.exports = {
 					grant_type: process.env.OPTMIZELY_API_GRANT_TYPE, // // The grant type of the Optimizely/Episerver API user. Default is "password"
 					client_id: process.env.OPTMIZELY_API_CLIENT_ID, // The client ID of the Optimizely/Episerver API user. Default is "Default"
 				},
-				endpoints: {
-					OptimizelyLocations: "/api/locations?lang=en-us&market=US",
-					OptimizelyAboutUsDesignersPageContentChildren: "/api/episerver/v2.0/content/14675/children?expand=*",
-					OptimizelyAboutUsPageContentChildren: "/api/episerver/v2.0/content/14110/children?expand=*",
-					OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/api/episerver/v2.0/content/14129/children?expand=*",
-					OptimizelyBedAccessoriesLegsPageContentChildren: "/api/episerver/v2.0/content/14131/children?expand=*",
-				},
+				endpoints: [
+					{
+						nodeName: "OptimizelyPageContent",
+						endpoint:
+							"/api/episerver/v2.0/content?references=14099,14104,14105,14106,14107,14109,14111,14110,14112,16621,14118,14117,14119,14980&expand=*",
+						schema: null
+					},
+					{
+						nodeName: "OptimizelyHomePageContentChildren",
+						endpoint: "/api/episerver/v2.0/content/14099/children?expand=*",
+						schema: null
+					},
+					{
+						nodeName: "OptimizelyLocations",
+						endpoint: "/api/locations?lang=en-us&market=US",
+						schema: `
+							id: ID!
+							images: [String]
+							inRiverId: Int!
+							latitude: String
+							sharpenImages: [File] @link(from: "fields.localFile")
+						`
+					}
+				]
 			},
 		},
 	],
@@ -70,29 +91,6 @@ module.exports = {
 ```
 
 ## Configuration Options
-
-### Endpoints
-
-Add a single or multiple `endpoints`.
-
-> **Note**: The `endpoints` should start with `/api/**/*` as the base URL will be added automatically via your `options.auth.site_url` value.
-
-```javascript
-options: {
-	// ...
-
-	endpoints: {
-		// Single endpoint
-		OptimizelyAboutUsDesignersPageContentChildren: "/api/episerver/v2.0/content/14675/children?expand=*",
-
-		// Multiple endpoints
-		OptimizelyLocations: "/api/locations?lang=en-us&market=US",
-		OptimizelyAboutUsPageContentChildren: "/api/episerver/v2.0/content/14110/children?expand=*",
-		OptimizelyBedAccessoriesHeadboardsPageContentChildren: "/api/episerver/v2.0/content/14129/children?expand=*",
-		OptimizelyBedAccessoriesLegsPageContentChildren: "/api/episerver/v2.0/content/14131/children?expand=*",
-	}
-}
-```
 
 ### Additional Headers
 
@@ -114,6 +112,78 @@ options: {
 			"Access-Control-Allow-Methods": "Custom Value"
 		}
 	}
+}
+```
+
+### Endpoints
+
+Add a single or multiple `endpoints`.
+
+> **Note**: The `endpoints` should start with `/api/**/*` as the base URL will be added automatically via your `options.auth.site_url` value.
+
+```javascript
+options: {
+	// ...
+
+	endpoints: [
+		// Single endpoint
+		{
+			nodeName: "OptimizelyPageContent",
+			endpoint: "/api/episerver/v2.0/content?references=14099,14104,14105,14106,14107,14109,14111,14110,14112,16621,14118,14117,14119,14980&expand=*",
+			schema: null
+		},
+
+		// Multiple endpoints
+		{
+			nodeName: "OptimizelyHomePageContentChildren",
+			endpoint: "/api/episerver/v2.0/content/14099/children?expand=*",
+			schema: null
+		},
+		{
+			nodeName: "OptimizelyLocations",
+			endpoint: "/api/locations?lang=en-us&market=US",
+			schema: `
+				id: ID!
+				images: [String]
+				inRiverId: Int!
+				latitude: String
+				sharpenImages: [File] @link(from: "fields.localFile")
+			`
+		}
+	];
+}
+```
+
+### Global Schema
+
+Add a global schema to all `endpoints`. This will be merged with the `endpoint` schema. This is useful for adding global fields to all `endpoints`.
+
+```javascript
+options: {
+	// ...
+
+	globals: {
+		schema: `
+			type ContentLink {
+				id: Int!
+				url: String!
+				expanded: Expanded @dontInfer
+			}
+		`
+	},
+	endpoints: [
+		{
+			nodeName: "OptimizelyPageContent",
+			endpoint: "/api/episerver/v2.0/content?references=14099,14104,14105,14106,14107,14109,14111,14110,14112,16621,14118,14117,14119,14980&expand=*",
+			schema: `
+				id: ID!
+				name: String
+				metaTitle: String
+				metaDescription: String
+				contentLink: ContentLink
+			`
+		}
+	]
 }
 ```
 
@@ -181,9 +251,28 @@ Assuming you correctly setup the plugin in `gatsby-config.js` and you have a `Op
 options: {
 	// ...
 
-	endpoints: {
-		OptimizelyAboutUsDesignersPageContentChildren: "/api/episerver/v2.0/content/14675/children?expand=*",
-	}
+	globals: {
+		schema: `
+			type ContentLink {
+				id: Int!
+				url: String!
+				expanded: Expanded @dontInfer
+			}
+		`
+	},
+	endpoints: [
+		{
+			nodeName: "OptimizelyPageContent",
+			endpoint: "/api/episerver/v2.0/content?references=14099,14104,14105,14106,14107,14109,14111,14110,14112,16621,14118,14117,14119,14980&expand=*",
+			schema: `
+				id: ID!
+				name: String
+				metaTitle: String
+				metaDescription: String
+				contentLink: ContentLink
+			`
+		}
+	]
 }
 ```
 
@@ -191,131 +280,16 @@ you can query the data as follows:
 
 ```graphql
 {
-	allOptimizelyAboutUsDesignersPageContentChildren(filter: { status: { eq: "Published" } }) {
+	allOptimizelyPageContent {
 		edges {
 			node {
 				id
 				name
+				metaTitle
+				metaDescription
 				contentLink {
 					id
 					url
-				}
-				contentType
-				language {
-					displayName
-					link
-					name
-				}
-				status
-				contentBlocks {
-					displayOption
-					contentLink {
-						expanded {
-							body
-							column1Body
-							column1PrimaryCTA {
-								text
-								target
-								title
-								url
-							}
-							column1SecondaryCTA {
-								target
-								text
-								title
-								url
-							}
-							column2PrimaryCTA {
-								target
-								text
-								title
-								url
-							}
-							column2SecondaryCTA {
-								target
-								text
-								title
-								url
-							}
-							contentLink {
-								id
-							}
-							contentType
-							disableImageZoom
-							dynamicStyles {
-								contentLink {
-									id
-								}
-								themeColor
-							}
-							eyeBrow
-							heading
-							headingH1
-							items {
-								contentLink {
-									id
-								}
-								body
-								contentType
-								eyeBrow
-								heading
-								image {
-									id
-									url
-									expanded {
-										contentLink {
-											id
-											url
-										}
-										contentType
-										height
-										name
-										status
-										url
-										width
-										size
-									}
-								}
-								link {
-									target
-									text
-									title
-									url
-								}
-								name
-								status
-								parentLink {
-									id
-									url
-								}
-							}
-							language {
-								displayName
-								name
-							}
-							layout
-							primaryCTA {
-								text
-								url
-								title
-								target
-							}
-							secondaryCTA {
-								target
-								text
-								title
-								url
-							}
-							status
-							style
-							textPosition
-							textPosition2
-							image1 {
-								id
-								url
-							}
-						}
-					}
 				}
 			}
 		}
