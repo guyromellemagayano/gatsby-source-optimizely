@@ -265,7 +265,7 @@ export class Optimizely {
 
 					// If the item has a content blocks property, fetch the content blocks data and expand its properties
 					if (isArrayType(contentBlocks) && !isEmpty(contentBlocks)) {
-						const expandedContentBlocks = handleExpandContentBlocks(contentBlocks);
+						const expandedContentBlocks = await handleExpandContentBlocks(contentBlocks);
 
 						// Update the content blocks property with the expanded data
 						tempItem.contentBlocks = expandedContentBlocks;
@@ -279,7 +279,7 @@ export class Optimizely {
 
 					// If the item has a content blocks top property, fetch the content blocks data and expand its properties
 					if (isArrayType(contentBlocksTop) && !isEmpty(contentBlocksTop)) {
-						const expandedContentBlocksTop = handleExpandContentBlocks(contentBlocksTop);
+						const expandedContentBlocksTop = await handleExpandContentBlocks(contentBlocksTop);
 
 						// Update the content blocks property with the expanded data
 						tempItem.contentBlocksTop = expandedContentBlocksTop;
@@ -293,7 +293,7 @@ export class Optimizely {
 
 					// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
 					if (isArrayType(contentBlocksBottom) && !isEmpty(contentBlocksBottom)) {
-						const expandedContentBlocksBottom = handleExpandContentBlocks(contentBlocksBottom);
+						const expandedContentBlocksBottom = await handleExpandContentBlocks(contentBlocksBottom);
 
 						// Update the content blocks property with the expanded data
 						tempItem.contentBlocksBottom = expandedContentBlocksBottom;

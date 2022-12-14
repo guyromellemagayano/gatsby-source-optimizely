@@ -2,6 +2,9 @@
 export const IS_DEV = process.env.NODE_ENV === "development";
 export const IS_PROD = process.env.NODE_ENV === "production";
 
+// Cache
+export const CACHE_KEY = "@epicdesignlabs/gatsby-source-optimizely";
+
 // Request
 export const REQUEST_URL_SLUG = "/api/episerver";
 export const REQUEST_ACCEPT_HEADER = "application/json";
