@@ -24,8 +24,8 @@ Provide support for the following features:
 - Request timeouts in all `optimizely/episerver` API requests
 - Throttling, debouncing, and adjusting the number of concurrent `optimizely/episerver` API requests
 - Add support for `expanded` data on some content blocks: `images`, `dynamicStyles`, `items`, `form` key fields are currently supported with more to come in the future
-- Image optimizations for `optimizely/episerver` API images
-- Type resolvers for `optimizely/episerver` API content blocks
+- Option for opting out of type inference for `optimizely/episerver` API `gatsby` nodes or add custom `gatsby` node schemas for `optimizely/episerver` API `gatsby` nodes
+<!-- - **[BETA]** Support for enhanced `preview` mode for testing `optimizely/episerver` webhooks. Currently supports [**Netlify**](https://www.netlify.com/) -->
 
 ## Installation and Setup
 
@@ -92,6 +92,21 @@ module.exports = {
 
 ## Configuration Options
 
+<!-- ### [BETA] Preview Mode
+
+To properly enable preview mode, deploy a site instance in the server, get your site URL and add it under the key `siteUrl` and set the `preview` mode to `true` to options as shown. Default is `false`.
+
+```javascript
+options: {
+	// ...
+
+	preview: {
+		enabled: true;
+		site_url: "https://example.com";
+	}
+}
+``` -->
+
 ### Additional Headers
 
 Add additional headers to the request as follows:
@@ -156,7 +171,7 @@ options: {
 
 ### Global Schema
 
-Add a global schema to all `endpoints`. This will be merged with the `endpoint` schema. This is useful for adding global fields to all `endpoints`.
+Add a global schema to all `endpoints`. This will be merged with the `endpoint` schema. This is useful for adding global types that affect multiple `endpoints`.
 
 ```javascript
 options: {
@@ -167,7 +182,6 @@ options: {
 			type ContentLink {
 				id: Int!
 				url: String!
-				expanded: Expanded @dontInfer
 			}
 		`
 	},
@@ -256,7 +270,6 @@ options: {
 			type ContentLink {
 				id: Int!
 				url: String!
-				expanded: Expanded @dontInfer
 			}
 		`
 	},
