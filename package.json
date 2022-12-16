@@ -1,6 +1,6 @@
 {
 	"name": "@epicdesignlabs/gatsby-source-optimizely",
-	"version": "4.0.0",
+	"version": "4.0.1",
 	"description": "This unofficial source plugin makes Optimizely API data available in GatsbyJS sites. Currently in active development.",
 	"scripts": {
 		"build": "babel ./src/ --out-dir ./ --source-maps",
