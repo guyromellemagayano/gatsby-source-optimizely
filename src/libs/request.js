@@ -62,8 +62,6 @@ export class Request {
 			}, this.request_throttle_interval);
 
 			if (this.pending_requests <= this.request_concurrency) {
-				console.warn(`[${convertStringToUppercase(method)}] ${url} - (SENT)`);
-
 				// Wait for all throttle to clear
 				throttleInterval();
 			}

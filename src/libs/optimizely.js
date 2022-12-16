@@ -91,8 +91,14 @@ export class Optimizely {
 					}
 				})
 			)
-				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value) || res)
-				.catch((err) => err);
+				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value))
+				.catch((err) => {
+					// Display error message
+					console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+
+					// Return the error
+					return err;
+				});
 
 			return expandedItemsData;
 		};
@@ -114,10 +120,9 @@ export class Optimizely {
 							const { dynamicStyles = null, items = null, images = null, form = null } = tempBlock.contentLink.expanded;
 
 							// If the block has a `dynamicStyles` property, expand it
-							if (!isEmpty(dynamicStyles)) {
+							if (isArrayType(dynamicStyles) && !isEmpty(dynamicStyles)) {
 								const expandedDynamicStyles = await handleExpandKeyValues(dynamicStyles);
 
-								delete tempBlock.contentLink.expanded.dynamicStyles;
 								tempBlock.contentLink.expanded.dynamicStyles = expandedDynamicStyles;
 
 								// Compare the expanded block with the original block
@@ -128,10 +133,9 @@ export class Optimizely {
 							}
 
 							// If the block has a `items` property, expand it
-							if (!isEmpty(items)) {
+							if (isArrayType(items) && !isEmpty(items)) {
 								const expandedItems = await handleExpandKeyValues(items);
 
-								delete tempBlock.contentLink.expanded.items;
 								tempBlock.contentLink.expanded.items = expandedItems;
 
 								// Compare the expanded block with the original block
@@ -142,10 +146,9 @@ export class Optimizely {
 							}
 
 							// If the block has a `images` property, expand it
-							if (!isEmpty(images)) {
+							if (isArrayType(images) && !isEmpty(images)) {
 								const expandedImages = await handleExpandKeyValues(images);
 
-								delete tempBlock.contentLink.expanded.images;
 								tempBlock.contentLink.expanded.images = expandedImages;
 
 								// Compare the expanded block with the original block
@@ -156,10 +159,9 @@ export class Optimizely {
 							}
 
 							// If the block has a `form` property, expand it
-							if (!isEmpty(form)) {
+							if (isArrayType(form) && !isEmpty(form)) {
 								const expandedForm = await handleExpandKeyValues(form);
 
-								delete tempBlock.contentLink.expanded.form;
 								tempBlock.contentLink.expanded.form = expandedForm;
 
 								// Compare the expanded block with the original block
@@ -181,8 +183,14 @@ export class Optimizely {
 					}
 				})
 			)
-				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value) || res)
-				.catch((err) => err);
+				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value))
+				.catch((err) => {
+					// Display error message
+					console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+
+					// Return the error
+					return err;
+				});
 
 			return expandedBlocksData;
 		};
