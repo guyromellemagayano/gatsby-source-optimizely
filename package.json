@@ -34,15 +34,25 @@
 		"source"
 	],
 	"author": "Epic Design Labs <info@epicdesignlabs.com> (https://epicdesignlabs.com)",
+	"contributors": [
+		{
+			"name": "Guy Romelle Magayano",
+			"email": "aspiredtechie2010@gmail.com",
+			"url": "https://guyromellemagayano.dev"
+		},
+		{
+			"name": "Max Jerry",
+			"email": "maxjerry0107@gmail.com",
+			"url": "https://www.maxjerry.com/"
+		}
+	],
 	"license": "MIT",
 	"main": "index.js",
 	"dependencies": {
 		"axios": "^0.27.2",
-		"flatted": "^3.2.7",
 		"gatsby-source-filesystem": "^4.24.0",
 		"lodash": "^4.17.21",
-		"qs": "^6.11.0",
-		"winston": "^3.8.2"
+		"qs": "^6.11.0"
 	},
 	"devDependencies": {
 		"@babel/cli": "^7.19.3",
