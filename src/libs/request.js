@@ -1,7 +1,8 @@
 "use strict";
 
 import axios from "axios";
-import { REQUEST_ACCEPT_HEADER, REQUEST_CONCURRENCY, REQUEST_DEBOUNCE_INTERVAL, REQUEST_PENDING_COUNT, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT } from "../constants";
+import * as https from "https";
+import { REQUEST_CONCURRENCY, REQUEST_DEBOUNCE_INTERVAL, REQUEST_PENDING_COUNT, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT } from "../constants";
 import { convertObjectToString, convertStringToLowercase, convertStringToUppercase } from "../utils/convertValues";
 import { debounce } from "../utils/debounce";
 import { throttle } from "../utils/throttle";
@@ -38,12 +39,9 @@ export class Request {
 			},
 			responseType: this.response_type,
 			withCredentials: true,
-			timeout: this.request_timeout
+			timeout: this.request_timeout,
+			httpsAgent: new https.Agent({ keepAlive: true })
 		};
-
-		// Override default `axios` instance
-		axios.defaults.headers.common["Accept"] = REQUEST_ACCEPT_HEADER;
-		axios.defaults.headers.common["Content-Type"] = REQUEST_ACCEPT_HEADER;
 
 		// Custom `request` instance
 		const RequestAxiosInstance = axios.create(config);
