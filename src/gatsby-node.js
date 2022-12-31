@@ -18,7 +18,6 @@ import {
 } from "./constants";
 import { Optimizely } from "./libs/optimizely";
 import { convertObjectToString, convertStringToCamelCase } from "./utils/convertValues";
-import { isEqual } from "./utils/isEqual";
 import { isArrayType, isEmpty, isObjectType, isStringType } from "./utils/typeCheck";
 
 /**
@@ -132,33 +131,40 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 		// 			.description("The webhook URL for the Optimizely/Episerver site")
 		// 	})
 		// }).description("The preview options for the plugin"),
-		globals: Joi.object({
-			schema: Joi.string().when("enabled", {
+		globals: Joi.object()
+			.when("enabled", {
 				is: true,
-				then: Joi.string()
-					.required()
-					.messages({
-						"string.empty": "The `globals.schema` is empty. Please provide a valid schema.",
-						"string.required": "The `globals.schema` is required."
-					})
-					.description("The schema for the Optimizely/Episerver site")
+				then: Joi.object({
+					schema: Joi.string()
+						.required()
+						.allow(null)
+						.default(null)
+						.messages({
+							"string.empty": "The `globals.schema` is empty. Please provide a valid schema.",
+							"string.required": "The `globals.schema` is required."
+						})
+						.description("The schema for the Optimizely/Episerver site")
+				})
 			})
-		}).description("The global options for the plugin"),
+			.messages({
+				"object.required": "The `globals` object is required."
+			})
+			.description("The global options for the plugin"),
 		endpoints: Joi.array()
 			.required()
 			.items({
 				nodeName: Joi.string()
 					.required()
 					.messages({
-						"string.empty": "The `endpoints[].nodeName` is empty. Please provide a valid node name.",
-						"string.required": "The `endpoints[].nodeName` is required."
+						"string.empty": "The `endpoints[index].nodeName` is empty. Please provide a valid node name.",
+						"string.required": "The `endpoints[index].nodeName` is required."
 					})
 					.description("The name of the node to create"),
 				endpoint: Joi.string()
 					.required()
 					.messages({
-						"string.empty": "The `endpoints[].endpoint` is empty. Please provide a valid endpoint.",
-						"string.required": "The `endpoints[].endpoint` is required."
+						"string.empty": "The `endpoints[index].endpoint` is empty. Please provide a valid endpoint.",
+						"string.required": "The `endpoints[index].endpoint` is required."
 					})
 					.description("The endpoint to create nodes for"),
 				schema: Joi.string().allow(null).default(null).description("The schema to use for the node")
@@ -231,92 +237,107 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 	// Authenticate with the Optimizely/Episerver
 	const auth = await optimizely.authenticate();
 
+	/**
+	 * @description Handle node creation
+	 * @param {*} sourceData
+	 * @returns {Promise<void>} Node creation promise
+	 */
+	const handleNodeCreation = async (sourceData = null) => {
+		sourceData
+			?.filter(({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(data) && !isEmpty(endpoint))
+			?.map(async ({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => {
+				// Check if the data was retrieved successfully
+				if (status === "fulfilled" && !isEmpty(data) && !isEmpty(nodeName) && isStringType(nodeName)) {
+					const updatedData = handleCamelizeKeys(data);
+
+					if (!isEmpty(updatedData)) {
+						// Create nodes from the data
+						if (isArrayType(updatedData)) {
+							updatedData?.map(async (datum) => {
+								await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint);
+							});
+						} else {
+							await handleCreateNodeFromData(updatedData, nodeName, helpers, updatedData?.contentLink?.url || site_url + endpoint);
+						}
+					} else {
+						// Send log message to console if an error occurred
+						console.error(`[ERROR] No data was retrieved from the Optimizely/Episerver API. Please check your credentials and try again.`);
+					}
+				}
+			});
+
+		// Cache the data
+		await cache
+			.set(CACHE_KEY, sourceData)
+			.then(() => console.info(`[CACHE] Node creation performed successfully!`))
+			.catch((error) => console.error(`[ERROR] There was an error caching the data. ${convertObjectToString(error)}`))
+			.finally(() => console.info("@epicdesignlabs/gatsby-source-optimizely finished sourcing nodes successfully!"));
+
+		// Resolve the promise
+		return sourceData;
+	};
+
 	if (!isEmpty(auth?.access_token)) {
 		// Send log message to console if authentication was successful
 		console.info(`[AUTH] ${convertObjectToString(auth?.access_token)}`);
 
-		await Promise.allSettled(
-			endpoints?.map(async ({ nodeName = null, endpoint = null }) => {
-				const url = site_url + endpoint;
+		if (!isEmpty(cachedData)) {
+			// Send log message to console if the cached data is available
+			console.warn(`[CACHE] Current cache is available. Proceeding to node creation...`);
 
-				const results = await optimizely.get({
-					url,
-					headers: {
-						...headers,
-						"Authorization": `Bearer ${auth?.access_token}`,
-						"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
-					},
-					endpoint: nodeName
-				});
+			// Create nodes from the cached data
+			await handleNodeCreation(cachedData);
 
-				// Resolve the promise
-				return {
-					nodeName,
-					data: results || null,
-					endpoint
-				};
-			})
-		)
-			.then(async (res) => {
-				// Store the data in the cache
-				if (!isEmpty(res)) {
-					sourceData = res;
-				}
+			// Resolve the promise
+			return cachedData;
+		} else {
+			// Send log message to console if the cached data is not available
+			console.warn(`[CACHE] Current cache is not available. Proceeding to source data...`);
 
-				// Stringify both the cached data and the source data and compare them
-				const stringifiedCachedData = convertObjectToString(cachedData);
-				const stringifiedSourceData = convertObjectToString(sourceData);
+			await Promise.allSettled(
+				endpoints?.map(async ({ nodeName = null, endpoint = null }) => {
+					const url = site_url + endpoint;
 
-				// Check if cached data exists and if the cached data is the same as the source data
-				if (!isEmpty(cachedData) && !isEmpty(sourceData) && isEqual(stringifiedCachedData, stringifiedSourceData)) {
-					// Send log message to console if the cached data is the same as the source data
-					console.warn(`[CACHE] Current cache is the same as the source data. Proceeding to node creation...`);
-				} else {
-					// Send log message to console if the cached data is not the same as the source data
-					console.warn(`[CACHE] Current cache is not the same as the source data. Proceeding to cache update...`);
-
-					// Cache the data
-					await cache.set(CACHE_KEY, sourceData).then(() => console.info(`[CACHE] Updated source data cached successfully! Proceeding to node creation...`));
-				}
-
-				sourceData
-					?.filter(({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(data) && !isEmpty(endpoint))
-					?.map(async ({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => {
-						// Check if the data was retrieved successfully
-						if (status === "fulfilled" && !isEmpty(data) && !isEmpty(nodeName) && isStringType(nodeName)) {
-							const updatedData = handleCamelizeKeys(data);
-
-							if (!isEmpty(updatedData)) {
-								// Create nodes from the data
-								if (isArrayType(updatedData)) {
-									updatedData?.map(async (datum) => {
-										await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint);
-									});
-								} else {
-									await handleCreateNodeFromData(updatedData, nodeName, helpers, updatedData?.contentLink?.url || site_url + endpoint);
-								}
-							} else {
-								// Send log message to console if an error occurred
-								console.error(`[ERROR] No data was retrieved from the Optimizely/Episerver API. Please check your credentials and try again.`);
-							}
-						}
+					const results = await optimizely.get({
+						url,
+						headers: {
+							...headers,
+							"Authorization": `Bearer ${auth?.access_token}`,
+							"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
+						},
+						endpoint: nodeName
 					});
 
-				// Resolve the promise
-				return cachedData;
-			})
-			.catch((err) => {
-				// Send log message to console if an error occurred
-				console.error(`[GET] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+					// Resolve the promise
+					return {
+						nodeName,
+						data: results || null,
+						endpoint
+					};
+				})
+			)
+				.then(async (res) => {
+					// Store the data in the cache
+					if (!isEmpty(res)) {
+						sourceData = res;
+					}
 
-				// Reject the promise
-				return err;
-			})
-			.finally(async () => {
-				console.info("@epicdesignlabs/gatsby-source-optimizely task processing complete!");
+					// Create nodes from the cached data
+					await handleNodeCreation(sourceData);
 
-				return;
-			});
+					// Resolve the promise
+					return sourceData;
+				})
+				.catch((err) => {
+					// Send log message to console if an error occurred
+					console.error(`[GET] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+
+					// Reject the promise
+					return err;
+				});
+		}
+
+		return;
 	} else {
 		// Send error message to console if an error occurred
 		throw new Error(`[AUTH] API authentication failed. Please check your credentials and try again.`);
@@ -331,10 +352,7 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 exports.createSchemaCustomization = ({ actions: { createTypes } }, pluginOptions) => {
 	let typeDefs = ``;
 
-	const {
-		globals: { schema = null },
-		endpoints = []
-	} = pluginOptions;
+	const { globals: { schema = null } = null, endpoints = [] } = pluginOptions;
 
 	if (!isEmpty(endpoints)) {
 		endpoints?.map(({ nodeName = null, schema = null }) => {
