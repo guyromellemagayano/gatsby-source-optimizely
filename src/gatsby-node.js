@@ -1,10 +1,12 @@
 /* eslint-disable no-unused-vars */
 "use strict";
 
+import { randomUUID } from "crypto";
 import _ from "lodash";
 import {
 	ACCESS_CONTROL_ALLOW_CREDENTIALS,
 	ACCESS_CONTROL_ALLOW_HEADERS,
+	APP_NAME,
 	AUTH_CLIENT_ID,
 	AUTH_GRANT_TYPE,
 	AUTH_HEADERS,
@@ -18,7 +20,7 @@ import {
 } from "./constants";
 import { Optimizely } from "./libs/optimizely";
 import { convertObjectToString, convertStringToCamelCase } from "./utils/convertValues";
-import { isArrayType, isEmpty, isObjectType, isStringType } from "./utils/typeCheck";
+import { isArrayType, isEmpty, isObjectType } from "./utils/typeCheck";
 
 /**
  * @description Camelize keys of an object
@@ -40,6 +42,7 @@ const handleCamelizeKeys = (obj) => {
 
 	return obj;
 };
+
 /**
  * @description Create a node from the data
  * @param {Object} item
@@ -53,9 +56,10 @@ const handleCreateNodeFromData = async (item = null, nodeType = null, helpers = 
 
 	if (!isEmpty(item) && !isEmpty(nodeType)) {
 		const stringifiedItem = convertObjectToString(item);
+		const uuid = randomUUID();
 
 		const nodeMetadata = {
-			id: createNodeId(`${nodeType}-${endpoint}`),
+			id: createNodeId(`${uuid}-${nodeType}-${endpoint}`),
 			parent: null,
 			children: [],
 			internal: {
@@ -244,34 +248,29 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 	 */
 	const handleNodeCreation = async (sourceData = null) => {
 		sourceData
-			?.filter(({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(data) && !isEmpty(endpoint))
+			?.filter(({ status = null, value: { nodeName = null, endpoint = null } }) => status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint))
 			?.map(async ({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => {
 				// Check if the data was retrieved successfully
-				if (status === "fulfilled" && !isEmpty(data) && !isEmpty(nodeName) && isStringType(nodeName)) {
+				if (status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint) && !isEmpty(data)) {
+					// Handle camel casing of the data
 					const updatedData = handleCamelizeKeys(data);
 
-					if (!isEmpty(updatedData)) {
-						// Create nodes from the data
-						if (isArrayType(updatedData)) {
-							updatedData?.map(async (datum) => {
-								await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint);
-							});
-						} else {
-							await handleCreateNodeFromData(updatedData, nodeName, helpers, updatedData?.contentLink?.url || site_url + endpoint);
-						}
+					// Create nodes from the data
+					if (isArrayType(updatedData)) {
+						updatedData?.map(async (datum) => {
+							await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint);
+						});
 					} else {
-						// Send log message to console if an error occurred
-						console.error(`[ERROR] No data was retrieved from the Optimizely/Episerver API. Please check your credentials and try again.`);
+						await handleCreateNodeFromData(updatedData, nodeName, helpers, updatedData?.contentLink?.url || site_url + endpoint);
 					}
 				}
-			});
+
+				// Resolve the promise
+				return;
+			}) || null;
 
 		// Cache the data
-		await cache
-			.set(CACHE_KEY, sourceData)
-			.then(() => console.info(`[CACHE] Node creation performed successfully!`))
-			.catch((error) => console.error(`[ERROR] There was an error caching the data. ${convertObjectToString(error)}`))
-			.finally(() => console.info("@epicdesignlabs/gatsby-source-optimizely finished sourcing nodes successfully!"));
+		await cache.set(CACHE_KEY, sourceData).catch((err) => console.error(`[ERROR] ${err?.message} || ${convertObjectToString(err)} || "An error occurred while caching the data. Please try again later."`));
 
 		// Resolve the promise
 		return sourceData;
@@ -314,7 +313,7 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 						data: results || null,
 						endpoint
 					};
-				})
+				}) || null
 			)
 				.then(async (res) => {
 					// Store the data in the cache
@@ -334,14 +333,21 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 
 					// Reject the promise
 					return err;
+				})
+				.finally(() => {
+					return;
 				});
 		}
 
 		return;
 	} else {
 		// Send error message to console if an error occurred
-		throw new Error(`[AUTH] API authentication failed. Please check your credentials and try again.`);
+		console.error(`[AUTH] API authentication failed. Please check your credentials and try again.`);
 	}
+
+	console.info(`${APP_NAME} task processing complete!`);
+
+	return;
 };
 
 /**

@@ -379,5 +379,3 @@ export class Optimizely {
 		return results;
 	}
 }
-
-export default Optimizely;

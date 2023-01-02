@@ -2,7 +2,7 @@
 
 import axios from "axios";
 import * as https from "https";
-import { REQUEST_CONCURRENCY, REQUEST_DEBOUNCE_INTERVAL, REQUEST_PENDING_COUNT, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT } from "../constants";
+import { AUTH_HEADERS, REQUEST_CONCURRENCY, REQUEST_DEBOUNCE_INTERVAL, REQUEST_PENDING_COUNT, REQUEST_RESPONSE_TYPE, REQUEST_THROTTLE_INTERVAL, REQUEST_TIMEOUT } from "../constants";
 import { convertObjectToString, convertStringToLowercase, convertStringToUppercase } from "../utils/convertValues";
 import { debounce } from "../utils/debounce";
 import { throttle } from "../utils/throttle";
@@ -10,7 +10,14 @@ import { throttle } from "../utils/throttle";
 export class Request {
 	constructor(
 		hostname,
-		{ headers = null, response_type = null, request_timeout = REQUEST_TIMEOUT, request_throttle_interval = REQUEST_THROTTLE_INTERVAL, request_debounce_interval = REQUEST_DEBOUNCE_INTERVAL, request_concurrency = REQUEST_CONCURRENCY } = {}
+		{
+			headers = AUTH_HEADERS,
+			response_type = REQUEST_RESPONSE_TYPE,
+			request_timeout = REQUEST_TIMEOUT,
+			request_throttle_interval = REQUEST_THROTTLE_INTERVAL,
+			request_debounce_interval = REQUEST_DEBOUNCE_INTERVAL,
+			request_concurrency = REQUEST_CONCURRENCY
+		} = {}
 	) {
 		this.hostname = hostname;
 		this.response_type = response_type;
@@ -38,7 +45,6 @@ export class Request {
 				...headers
 			},
 			responseType: this.response_type,
-			withCredentials: true,
 			timeout: this.request_timeout,
 			httpsAgent: new https.Agent({ keepAlive: true })
 		};
@@ -84,7 +90,7 @@ export class Request {
 			(err) => {
 				// Send error message to console if request fails
 				console.error(`[${convertStringToUppercase(method)}] ${url} - (ERROR)`);
-				console.error("\n", err.message, "\n");
+				console.error("\n", `${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`, "\n");
 
 				// Return error message
 				return err;
@@ -112,12 +118,14 @@ export class Request {
 
 					// Send log message when error response is received
 					console.error(`[${convertStringToUppercase(method)}] ${url} - (${err.response.status} ${err.response.statusText})`);
+					console.error("\n", `${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`, "\n");
 				} else if (err.request) {
 					// Decrement pending requests
 					this.pending_requests = Math.max(0, this.pending_requests > 0 ? this.pending_requests - 1 : 0);
 
 					// Send log message when error request is received
 					console.error(`[${convertStringToUppercase(method)}] ${url} - (${err.request.status} ${err.request.statusText})`);
+					console.error("\n", `${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`, "\n");
 				} else {
 					// Send log message when error is thrown
 					console.error(`[${convertStringToUppercase(method)}] ${url} - (ERROR)`);
