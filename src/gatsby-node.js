@@ -123,18 +123,6 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 				"object.required": "The `auth` object is required."
 			})
 			.description("The auth credentials for the Optimizely/Episerver site"),
-		// preview: Joi.object({
-		// 	webhook_url: Joi.string().when("enabled", {
-		// 		is: true,
-		// 		then: Joi.string()
-		// 			.required()
-		// 			.messages({
-		// 				"string.empty": "The `preview.webhook_url` is empty. Please provide a valid URL.",
-		// 				"string.required": "The `preview.webhook_url` is required."
-		// 			})
-		// 			.description("The webhook URL for the Optimizely/Episerver site")
-		// 	})
-		// }).description("The preview options for the plugin"),
 		globals: Joi.object()
 			.when("enabled", {
 				is: true,
@@ -199,7 +187,6 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 	// Prepare plugin options
 	const {
 		auth: { site_url = null, username = null, password = null, grant_type = AUTH_GRANT_TYPE, client_id = AUTH_CLIENT_ID, headers = AUTH_HEADERS },
-		// preview: { webhook_url = null },
 		endpoints = [],
 		response_type = REQUEST_RESPONSE_TYPE,
 		request_timeout = REQUEST_TIMEOUT,
@@ -333,9 +320,6 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 
 					// Reject the promise
 					return err;
-				})
-				.finally(() => {
-					return;
 				});
 		}
 
