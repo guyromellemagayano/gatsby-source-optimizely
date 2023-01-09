@@ -2,6 +2,7 @@
 "use strict";
 
 import { randomUUID } from "crypto";
+import { createRemoteFileNode } from "gatsby-source-filesystem";
 import _ from "lodash";
 import {
 	ACCESS_CONTROL_ALLOW_CREDENTIALS,
@@ -240,7 +241,7 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 				// Check if the data was retrieved successfully
 				if (status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint) && !isEmpty(data)) {
 					// Handle camel casing of the data
-					const updatedData = handleCamelizeKeys(data);
+					const updatedData = await handleCamelizeKeys(data);
 
 					// Create nodes from the data
 					if (isArrayType(updatedData)) {
@@ -258,6 +259,8 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 
 		// Cache the data
 		await cache.set(CACHE_KEY, sourceData).catch((err) => console.error(`[ERROR] ${err?.message} || ${convertObjectToString(err)} || "An error occurred while caching the data. Please try again later."`));
+
+		console.info(`${APP_NAME} task processing complete!`);
 
 		// Resolve the promise
 		return sourceData;
@@ -297,7 +300,7 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 					// Resolve the promise
 					return {
 						nodeName,
-						data: results || null,
+						data: !isEmpty(results) && !isEmpty(nodeName) ? (nodeName === "OptimizelyStoreContent" || nodeName === "OptimizelyHotelContent" ? results?.Locations : results) : null,
 						endpoint
 					};
 				}) || null
@@ -305,7 +308,30 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 				.then(async (res) => {
 					// Store the data in the cache
 					if (!isEmpty(res)) {
-						sourceData = res;
+						const tempRes = res;
+
+						tempRes.map(async (item) => {
+							const tempItem = item;
+
+							const {
+								status = null,
+								value: { nodeName = null, data = null, endpoint = null }
+							} = tempItem;
+
+							if (status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint) && !isEmpty(data)) {
+								if (nodeName === "OptimizelyStoreContent") {
+									tempItem.value.data = data?.filter(({ LocationType }) => LocationType === "Store");
+								} else if (nodeName === "OptimizelyHotelContent") {
+									tempItem.value.data = data?.filter(({ LocationType }) => LocationType === "Hotel");
+								}
+							}
+
+							item = tempItem;
+
+							return item;
+						});
+
+						sourceData = tempRes;
 					}
 
 					// Create nodes from the cached data
@@ -328,8 +354,6 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 		// Send error message to console if an error occurred
 		console.error(`[AUTH] API authentication failed. Please check your credentials and try again.`);
 	}
-
-	console.info(`${APP_NAME} task processing complete!`);
 
 	return;
 };
@@ -367,4 +391,175 @@ exports.createSchemaCustomization = ({ actions: { createTypes } }, pluginOptions
 	}
 
 	return;
+};
+
+/**
+ * @description Perform image optimizations on each node created
+ * @param {Object} node
+ * @param {Object} actions
+ * @param {Object} store
+ * @param {Object} cache
+ * @param {Object} reporter
+ * @returns {void}
+ */
+exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, getCache }) => {
+	if (node.internal.type.includes("Optimizely")) {
+		const contentBlocks = ["contentBlocks", "contentBlocksTop", "contentBlocksBottom"];
+		const blockImageElementObjects = ["image", "secondary", "image1", "image2", "headerImage", "listImage", "secondaryListImage", "topImage"];
+		const blockImageElementArrays = ["images", "items", "productImages"];
+
+		Object.keys(node)?.map(async (key) => {
+			await Promise.all(
+				contentBlocks
+					?.filter((contentBlock) => contentBlock?.includes(key))
+					?.map(() => {
+						node?.[key]?.map((block) => {
+							const {
+								contentLink: { expanded }
+							} = block;
+
+							Object.keys(expanded)?.map((expandedKey) => {
+								// Check for keys that contain image objects
+								blockImageElementObjects
+									?.filter((imageElement) => expandedKey === imageElement)
+									?.map(async () => {
+										await createRemoteFileNode({
+											url:
+												expanded?.[expandedKey]?.contentLink?.expanded?.contentLink?.url ||
+												expanded?.[expandedKey]?.contentLink?.expanded?.url ||
+												expanded?.[expandedKey]?.expanded?.url ||
+												expanded?.[expandedKey]?.url ||
+												expanded?.[expandedKey],
+											parentNodeId: node.id,
+											createNode,
+											createNodeId: () =>
+												`${node.id}-${key}-items--${
+													expanded?.[expandedKey]?.contentLink?.expanded?.contentLink?.url ||
+													expanded?.[expandedKey]?.contentLink?.expanded?.url ||
+													expanded?.[expandedKey]?.expanded?.url ||
+													expanded?.[expandedKey]?.url ||
+													expanded?.[expandedKey]
+												}`,
+											getCache
+										});
+									});
+
+								// Check for keys that contain image objects
+								blockImageElementArrays
+									?.filter((imageElement) => expandedKey === imageElement)
+									?.map(() => {
+										expanded?.[expandedKey]?.map(async (image) => {
+											await Promise.allSettled(
+												blockImageElementObjects
+													?.filter((imageElement) => Object.keys(image)?.includes(imageElement))
+													?.map(
+														async (imageElement) =>
+															await createRemoteFileNode({
+																url:
+																	image?.[imageElement]?.contentLink?.expanded?.contentLink?.url ||
+																	image?.[imageElement]?.contentLink?.expanded?.url ||
+																	image?.[imageElement]?.expanded?.url ||
+																	image?.[imageElement]?.url ||
+																	image?.[imageElement],
+																parentNodeId: node.id,
+																createNode,
+																createNodeId: () =>
+																	`${node.id}-${key}-items--${
+																		image?.[imageElement]?.contentLink?.expanded?.contentLink?.url ||
+																		image?.[imageElement]?.contentLink?.expanded?.url ||
+																		image?.[imageElement]?.expanded?.url ||
+																		image?.[imageElement]?.url ||
+																		image?.[imageElement]
+																	}`,
+																getCache
+															})
+													)
+											)
+												.then((res) => {
+													if (res && Array.isArray(res) && res?.length > 0) {
+														const fields = [];
+
+														res?.map((field) => fields.push(field.id));
+
+														createNodeField({
+															node,
+															name: `localFile`,
+															value: fields
+														});
+													}
+
+													return res;
+												})
+												.catch((err) => {
+													console.error(err);
+													return err;
+												});
+										});
+
+										return expanded?.[expandedKey];
+									});
+
+								return expanded;
+							});
+
+							return block;
+						});
+
+						return node;
+					})
+			);
+
+			await Promise.all(
+				blockImageElementObjects
+					?.filter((imageElement) => key === imageElement)
+					?.map(async () => {
+						await createRemoteFileNode({
+							url: node[key]?.contentLink?.expanded?.contentLink?.url || node[key]?.expanded?.contentLink?.url || node[key]?.expanded?.url || node[key]?.url || node[key],
+							parentNodeId: node.id,
+							createNode,
+							createNodeId: () => `${node.id}-${key}--${node[key]?.contentLink?.expanded?.contentLink?.url || node[key]?.expanded?.contentLink?.url || node[key]?.expanded?.url || node[key]?.url || node[key]}`,
+							getCache
+						});
+					})
+			);
+
+			await Promise.all(
+				blockImageElementArrays
+					?.filter((imageElement) => key === imageElement)
+					?.map(async () => {
+						await Promise.all(
+							node?.[key]?.map(
+								async (element) =>
+									await createRemoteFileNode({
+										url: element?.contentLink?.expanded?.contentLink?.url || element?.expanded?.contentLink?.url || element?.expanded?.url || element?.url || element,
+										parentNodeId: node.id,
+										createNode,
+										createNodeId: () => `
+											${node.id}-${key}-items--${element?.contentLink?.expanded?.contentLink?.url || element?.expanded?.contentLink?.url || element?.expanded?.url || element?.url || element}`,
+										getCache
+									})
+							)
+						)
+							.then((res) => {
+								if (res && Array.isArray(res) && res?.length > 0) {
+									const fields = [];
+
+									res?.map((field) => fields.push(field.id));
+
+									createNodeField({
+										node,
+										name: `localFile`,
+										value: fields
+									});
+								}
+
+								return res;
+							})
+							.catch((err) => err);
+
+						return node;
+					})
+			);
+		});
+	}
 };
