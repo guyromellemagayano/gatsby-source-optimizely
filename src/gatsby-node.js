@@ -319,10 +319,20 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 							} = tempItem;
 
 							if (status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint) && !isEmpty(data)) {
-								if (nodeName === "OptimizelyStoreContent") {
-									tempItem.value.data = data?.filter(({ LocationType }) => LocationType === "Store");
-								} else if (nodeName === "OptimizelyHotelContent") {
-									tempItem.value.data = data?.filter(({ LocationType }) => LocationType === "Hotel");
+								if (nodeName === "OptimizelyStoresContent") {
+									tempItem.value.data = data?.Locations?.filter((location) => location.LocationType === "Store")?.map((location) => {
+										return {
+											...location,
+											LocationType: "Store"
+										};
+									});
+								} else if (nodeName === "OptimizelyHotelsContent") {
+									tempItem.value.data = data?.Locations?.filter((location) => location.LocationType === "Hotel")?.map((location) => {
+										return {
+											...location,
+											LocationType: "Hotel"
+										};
+									});
 								}
 							}
 
@@ -475,25 +485,8 @@ exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, 
 															})
 													)
 											)
-												.then((res) => {
-													if (res && Array.isArray(res) && res?.length > 0) {
-														const fields = [];
-
-														res?.map((field) => fields.push(field.id));
-
-														createNodeField({
-															node,
-															name: `localFile`,
-															value: fields
-														});
-													}
-
-													return res;
-												})
-												.catch((err) => {
-													console.error(err);
-													return err;
-												});
+												.then((res) => res)
+												.catch((err) => err);
 										});
 
 										return expanded?.[expandedKey];
@@ -540,21 +533,7 @@ exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, 
 									})
 							)
 						)
-							.then((res) => {
-								if (res && Array.isArray(res) && res?.length > 0) {
-									const fields = [];
-
-									res?.map((field) => fields.push(field.id));
-
-									createNodeField({
-										node,
-										name: `localFile`,
-										value: fields
-									});
-								}
-
-								return res;
-							})
+							.then((res) => res)
 							.catch((err) => err);
 
 						return node;
