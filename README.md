@@ -191,13 +191,13 @@ options: {
 
 Set a custom request timeout for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `60000` _(60 seconds)_.
+**Default:** `0` _(0 second)_.
 
 ```javascript
 options: {
   // ...
 
-  request_timeout: 60000;
+  request_timeout: 0;
 }
 ```
 
@@ -205,13 +205,13 @@ options: {
 
 Set a custom request throttling interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `500` _(0.5 seconds)_.
+**Default:** `0` _(0 second)_.
 
 ```javascript
 options: {
   // ...
 
-  request_throttle_interval: 500;
+  request_throttle_interval: 0;
 }
 ```
 
@@ -219,13 +219,13 @@ options: {
 
 Set a custom request debouncing interval for the Optimizely/Episerver API requests (in milliseconds).
 
-**Default:** `500` _(0.5 seconds)_.
+**Default:** `0` _(0 seconds)_.
 
 ```javascript
 options: {
   // ...
 
-  request_debounce_interval: 500;
+  request_debounce_interval: 0;
 }
 ```
 
@@ -233,13 +233,13 @@ options: {
 
 Set a custom request concurrency for the Optimizely/Episerver API requests.
 
-**Default:** `100`.
+**Default:** `10000`.
 
 ```javascript
 options: {
   // ...
 
-  request_concurrency: 100;
+  request_concurrency: 10000;
 }
 ```
 
@@ -264,11 +264,13 @@ options: {
       nodeName: "OptimizelyPageContent",
       endpoint: "/api/episerver/v2.0/content?references=14099,14104,14105,14106,14107,14109,14111,14110,14112,16621,14118,14117,14119,14980&expand=*",
       schema: `
-        id: ID!
-        name: String
-        metaTitle: String
-        metaDescription: String
-        contentLink: ContentLink
+        type OptimizelyPageContent implements Node {
+          id: ID!
+          name: String
+          metaTitle: String
+          metaDescription: String
+          contentLink: ContentLink
+        }
       `
     }
   ]
