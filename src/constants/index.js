@@ -11,10 +11,10 @@ export const CACHE_KEY = "@epicdesignlabs/gatsby-source-optimizely";
 // Request
 export const REQUEST_URL_SLUG = "/api/episerver";
 export const REQUEST_ACCEPT_HEADER = "application/json";
-export const REQUEST_TIMEOUT = 60000;
-export const REQUEST_THROTTLE_INTERVAL = 500;
-export const REQUEST_DEBOUNCE_INTERVAL = 500;
-export const REQUEST_CONCURRENCY = 100;
+export const REQUEST_TIMEOUT = 0;
+export const REQUEST_THROTTLE_INTERVAL = 0;
+export const REQUEST_DEBOUNCE_INTERVAL = 0;
+export const REQUEST_CONCURRENCY = 10000;
 export const REQUEST_PENDING_COUNT = 0;
 export const REQUEST_RESPONSE_TYPE = "json";
 
