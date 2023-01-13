@@ -25,6 +25,7 @@ export class Optimizely {
 		this.password = config.password;
 		this.grant_type = config.grant_type;
 		this.client_id = config.client_id;
+		this.reporter = config.reporter;
 	}
 
 	/**
@@ -51,7 +52,7 @@ export class Optimizely {
 		});
 
 		// Run request
-		const { data } = await request.run({ url, method, body, headers });
+		const { data } = await request.run({ url, method, body, headers, reporter: this.reporter });
 
 		/**
 		 * @description Handle expanded keys and their values
@@ -71,30 +72,20 @@ export class Optimizely {
 
 							if (!isEmpty(expandedItemData)) {
 								tempItem = { ...tempItem, ...expandedItemData };
-
-								// Compare the expanded item with the original item
-								if (!isEqual(tempItem, item)) {
-									// If the item is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-								}
 							}
 						}
 
 						// Return the expanded item
 						return Promise.resolve(tempItem);
 					} catch (err) {
-						// Display error message
-						console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-
-						// Return the error
+						this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 						return Promise.reject(err);
 					}
 				})
 			)
 				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value))
 				.catch((err) => {
-					// Display error message
-					console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+					this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 
 					// Return the error
 					return err;
@@ -128,7 +119,7 @@ export class Optimizely {
 								// Compare the expanded block with the original block
 								if (!isEqual(tempBlock.contentLink.expanded.dynamicStyles, expandedDynamicStyles)) {
 									// If the block is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 
@@ -141,7 +132,7 @@ export class Optimizely {
 								// Compare the expanded block with the original block
 								if (!isEqual(tempBlock.contentLink.expanded.items, expandedItems)) {
 									// If the block is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 
@@ -154,7 +145,7 @@ export class Optimizely {
 								// Compare the expanded block with the original block
 								if (!isEqual(tempBlock.contentLink.expanded.images, expandedImages)) {
 									// If the block is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 
@@ -167,7 +158,7 @@ export class Optimizely {
 								// Compare the expanded block with the original block
 								if (!isEqual(tempBlock.contentLink.expanded.form, expandedForm)) {
 									// If the block is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 						}
@@ -175,18 +166,14 @@ export class Optimizely {
 						// Return the expanded block
 						return Promise.resolve(tempBlock);
 					} catch (err) {
-						// Display error message
-						console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-
-						// Return the error
+						this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 						return Promise.reject(err);
 					}
 				})
 			)
 				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value))
 				.catch((err) => {
-					// Display error message
-					console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+					this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 
 					// Return the error
 					return err;
@@ -216,7 +203,7 @@ export class Optimizely {
 								// Compare the expanded item with the original item
 								if (!isEqual(tempItem.contentBlocks, expandedContentBlocks)) {
 									// If the item is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 
@@ -230,7 +217,7 @@ export class Optimizely {
 								// Compare the expanded item with the original item
 								if (!isEqual(tempItem.contentBlocksTop, expandedContentBlocksTop)) {
 									// If the item is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 
@@ -244,15 +231,14 @@ export class Optimizely {
 								// Compare the expanded item with the original item
 								if (!isEqual(tempItem.contentBlocksBottom, expandedContentBlocksBottom)) {
 									// If the item is expanded, display a success message
-									console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
+									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
 								}
 							}
 
 							// Return the expanded item
 							return Promise.resolve(tempItem);
 						} catch (err) {
-							// Display error message
-							console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+							this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 
 							// Return the error
 							return Promise.reject(err);
@@ -281,7 +267,7 @@ export class Optimizely {
 						// Compare the expanded item with the original item
 						if (!isEqual(tempItem.contentBlocks, expandedContentBlocks)) {
 							// If the item is expanded, display a success message
-							console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
+							this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
 						}
 					}
 
@@ -295,7 +281,7 @@ export class Optimizely {
 						// Compare the expanded item with the original item
 						if (!isEqual(tempItem.contentBlocksTop, expandedContentBlocksTop)) {
 							// If the item is expanded, display a success message
-							console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
+							this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
 						}
 					}
 
@@ -309,15 +295,14 @@ export class Optimizely {
 						// Compare the expanded item with the original item
 						if (!isEqual(tempItem.contentBlocksBottom, expandedContentBlocksBottom)) {
 							// If the item is expanded, display a success message
-							console.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
+							this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
 						}
 					}
 
 					// Return the expanded item
 					return Promise.resolve(tempItem);
 				} catch (err) {
-					// Display error message
-					console.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+					this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 
 					// Return the error
 					return Promise.reject(err);
@@ -334,7 +319,9 @@ export class Optimizely {
 	 * @returns {Promise} Response promise
 	 */
 	async get({ url = null, body = null, headers = null, endpoint = null }) {
-		const results = await this.request({ url, method: "get", body, headers, endpoint });
+		const results = await this.request({ url, method: "get", body, headers, endpoint })
+			.then((res) => res)
+			.catch((err) => err);
 
 		return results;
 	}
@@ -347,7 +334,9 @@ export class Optimizely {
 	 * @returns {Promise} Response promise
 	 */
 	async post({ url = null, body = null, headers = null, endpoint = null }) {
-		const results = await this.request({ url, method: "post", body, headers, endpoint });
+		const results = await this.request({ url, method: "post", body, headers, endpoint })
+			.then((res) => res)
+			.catch((err) => err);
 
 		return results;
 	}
