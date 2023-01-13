@@ -3,11 +3,11 @@
 	"version": "4.1.1",
 	"description": "This unofficial source plugin makes Optimizely API data available in GatsbyJS sites. Currently in active development.",
 	"scripts": {
-		"build": "babel ./src/ --out-dir ./ --source-maps",
+		"build": "babel src --out-dir ./ --source-maps",
 		"commit": "git-cz",
-		"watch": "babel ./src/ --out-dir ./ --source-maps --watch",
-		"lint:eslint": "eslint \"./src/**/*.js\" --quiet --fix --color --ignore-path .gitignore",
-		"lint:prettier": "prettier \"./src/**/*.js\" --write --ignore-path .gitignore",
+		"watch": "babel src/ --out-dir ./ --source-maps --watch",
+		"lint:eslint": "eslint \"src/**/*.js\" --quiet --fix --color --ignore-path .gitignore",
+		"lint:prettier": "prettier \"src/**/*.js\" --write --ignore-path .gitignore",
 		"lint": "yarn lint:eslint && yarn lint:prettier",
 		"test": "yarn lint",
 		"prepare": "cross-env NODE_ENV=production yarn build",
@@ -50,7 +50,6 @@
 	"main": "index.js",
 	"dependencies": {
 		"axios": "^1.2.2",
-		"gatsby": "^5.0.0-next",
 		"gatsby-source-filesystem": "^5.4.0",
 		"lodash": "^4.17.21",
 		"qs": "^6.11.0"
@@ -78,6 +77,12 @@
 		"lint-staged": "^13.0.3",
 		"prettier": "^2.8.2",
 		"react": "^18.2.0"
+	},
+	"peerDependencies": {
+		"gatsby": "^5.0.0-next",
+		"gatsby-plugin-image": "^3.0.0-next",
+		"gatsby-plugin-sharp": "^5.0.0-next",
+		"sharp": "^0.30.1"
 	},
 	"bugs": {
 		"url": "https://github.com/Epic-Design-Labs/gatsby-source-optimizely/issues"
