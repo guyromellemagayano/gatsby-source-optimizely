@@ -56,7 +56,7 @@ const handleCamelizeKeys = (obj) => {
 const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, reporter) => {
 	const { createNode, createNodeId, createContentDigest } = helpers;
 
-	if (!isEmpty(nodeType)) {
+	if (!isEmpty(nodeType) && !isEmpty(endpoint)) {
 		const stringifiedItem = !isEmpty(item) ? convertObjectToString(item) : "";
 		const uuid = randomUUID();
 
@@ -257,15 +257,13 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
 			// Create nodes from the data
 			if (!isEmpty(updatedData)) {
 				if (isArrayType(updatedData)) {
-					updatedData?.map(async (datum) => {
-						await handleCreateNodeFromData(datum, node.nodeName, helpers, datum?.contentLink?.url || site_url + node.endpoint, reporter);
-
-						return Promise.resolve(datum);
-					});
+					await Promise.allSettled(
+						updatedData?.map(async (datum) => {
+							await handleCreateNodeFromData(datum, node.nodeName, helpers, datum?.contentLink?.url || site_url + node.endpoint, reporter);
+						})
+					);
 				} else if (isObjectType(updatedData)) {
 					await handleCreateNodeFromData(updatedData, node.nodeName, helpers, updatedData?.contentLink?.url || site_url + node.endpoint, reporter);
-
-					return Promise.resolve(updatedData);
 				} else {
 					return Promise.resolve(updatedData);
 				}
@@ -300,84 +298,91 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
 		const auth = await optimizely.authenticate();
 
 		if (!isEmpty(auth?.access_token)) {
+			const promises = [];
+
 			// Send log message to reporter if authentication was successful
 			reporter.info(`[AUTH] ${convertObjectToString(auth?.access_token)}`);
 
-			await Promise.allSettled(
-				endpoints.map(async ({ nodeName = null, endpoint = null }) => {
-					const url = site_url + endpoint || "";
+			// Convert above code using for loop
+			for (let i = 0; i < endpoints.length; i++) {
+				const { nodeName = null, endpoint = null } = endpoints[i];
 
-					const results = await optimizely.get({
-						url,
-						headers: {
-							...headers,
-							"Authorization": `Bearer ${auth?.access_token}`,
-							"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
-						},
-						endpoint: nodeName
-					});
+				const url = site_url + endpoint || "";
 
-					// Resolve the promise
-					return {
-						nodeName,
-						data: results || null,
-						endpoint
-					};
-				})
-			)
+				// Resolve the promise
+				promises.push(
+					await optimizely
+						.get({
+							url,
+							headers: {
+								...headers,
+								"Authorization": `Bearer ${auth?.access_token}`,
+								"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
+							},
+							endpoint: nodeName
+						})
+						.then((res) => {
+							// Resolve the promise
+							return {
+								nodeName,
+								data: res || null,
+								endpoint
+							};
+						})
+				);
+			}
+
+			await Promise.allSettled(promises)
 				.then(async (res) => {
 					// Store the data in the cache
 					if (!isEmpty(res)) {
 						sourceData = res;
-					}
 
-					// Create nodes from the cached data
-					sourceData
-						?.filter((item) => item?.status === "fulfilled")
-						?.map(async (item) => {
-							if (isArrayType(item.value.data)) {
-								if (item.value.nodeName === "OptimizelyStoreContent" || item.value.nodeName === "OptimizelyHotelContent") {
-									item.value.data?.Locations?.map(async (datum) => {
-										const data = {
-											nodeName: item.value.nodeName,
-											data: datum,
-											endpoint: item.value.endpoint
-										};
+						// Create nodes from the cached data
+						sourceData
+							?.filter((item) => item?.status === "fulfilled")
+							?.map(async (item) => {
+								if (isArrayType(item.value.data)) {
+									if (item.value.nodeName === "OptimizelyStoreContent" || item.value.nodeName === "OptimizelyHotelContent") {
+										item.value.data?.Locations?.map(async (datum) => {
+											const data = {
+												nodeName: item.value.nodeName,
+												data: datum,
+												endpoint: item.value.endpoint
+											};
 
-										await handleNodeCreation(data, reporter, helpers);
-									});
+											await handleNodeCreation(data, reporter, helpers);
+										});
+									} else {
+										item.value.data?.map(async (datum) => {
+											const data = {
+												nodeName: item.value.nodeName,
+												data: datum,
+												endpoint: item.value.endpoint
+											};
+
+											await handleNodeCreation(data, reporter, helpers);
+										});
+									}
 								} else {
-									item.value.data?.map(async (datum) => {
-										const data = {
-											nodeName: item.value.nodeName,
-											data: datum,
-											endpoint: item.value.endpoint
-										};
+									const data = {
+										nodeName: item.value.nodeName,
+										data: item.value?.data || null,
+										endpoint: item.value.endpoint
+									};
 
-										await handleNodeCreation(data, reporter, helpers);
-									});
+									await handleNodeCreation(data, reporter, helpers);
 								}
-							} else {
-								const data = {
-									nodeName: item.value.nodeName,
-									data: item?.value?.data || null,
-									endpoint: item.value.endpoint
-								};
+							});
 
-								await handleNodeCreation(data, reporter, helpers);
-							}
-						});
-
-					// Cache the data when the data is available and the environment is development
-					if (!isEmpty(sourceData) || IS_DEV) {
-						await cache
-							.set(CACHE_KEY, sourceData)
-							.then(() => reporter.info(`[CACHE] Cached ${sourceData.length} items successfully.`))
-							.catch((err) => reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while caching the data. Please try again later."}`));
+						// Cache the data when the data is available and the environment is development
+						if (!isEmpty(sourceData) && IS_DEV) {
+							await cache
+								.set(CACHE_KEY, sourceData)
+								.then(() => reporter.info(`[CACHE] Cached ${sourceData.length} items successfully.`))
+								.catch((err) => reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while caching the data. Please try again later."}`));
+						}
 					}
-
-					// Resolve the promise
-					return sourceData;
 				})
 				.catch((err) => {
 					this.reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while fetching and expanding the endpoints. Please try again later."}`);
