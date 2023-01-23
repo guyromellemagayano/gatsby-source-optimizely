@@ -3,7 +3,6 @@
 import qs from "qs";
 import { AUTH_ENDPOINT, AUTH_REQUEST_CONTENT_TYPE_HEADER, CONTENT_ENDPOINT, REQUEST_ACCEPT_HEADER, REQUEST_URL_SLUG } from "../constants";
 import { convertObjectToString } from "../utils/convertValues";
-import { isEqual } from "../utils/isEqual";
 import { isArrayType, isEmpty, isObjectType } from "../utils/typeCheck";
 import { Request } from "./request";
 
@@ -36,7 +35,7 @@ export class Optimizely {
 	 * @param {Object} headers
 	 * @returns {Object} API response
 	 */
-	async request({ url = null, method = "", body = null, headers = null, endpoint = null }) {
+	async request({ url, method = "", body, headers, endpoint }) {
 		// Prepare `url` for request execution
 		const request = new Request(this.site_url, {
 			headers: {
@@ -59,39 +58,76 @@ export class Optimizely {
 		 * @param {Array} items
 		 * @returns {Array} Expanded items
 		 */
-		const handleExpandKeyValues = async (items = []) => {
-			const expandedItemsData = await Promise.allSettled(
-				items?.map(async (item = {}) => {
-					try {
-						// Shallow copy of the item
-						let tempItem = { ...item };
+		const handleExpandKeyValues = async (items) => {
+			if (isArrayType(items)) {
+				const promises = [];
 
-						// Check if the item has an `contentLink.id` property
-						if (!isEmpty(tempItem?.contentLink?.id)) {
-							const { data: expandedItemData } = await request.run({ url: `${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`, method: "get" });
+				for (let i = 0; i < items.length; i++) {
+					const item = Object.assign({}, items[i]);
 
-							if (!isEmpty(expandedItemData)) {
-								tempItem = { ...tempItem, ...expandedItemData };
-							}
-						}
-
-						// Return the expanded item
-						return Promise.resolve(tempItem);
-					} catch (err) {
-						this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-						return Promise.reject(err);
+					// Check if the item has an `contentLink.id` property
+					if (item?.contentLink?.id) {
+						promises.push(await request.run({ url: `${this.site_url + CONTENT_ENDPOINT + item.contentLink.id + "?expand=*"}`, method: "get", body, headers, reporter: this.reporter }));
 					}
-				})
-			)
-				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value))
-				.catch((err) => {
-					this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+				}
 
-					// Return the error
-					return err;
-				});
+				if (!isEmpty(promises)) {
+					await Promise.allSettled(promises)
+						.then((res) => {
+							res
+								?.filter((subItem) => subItem?.status === "fulfilled")
+								?.map((subItem, index) => {
+									const subItemData = subItem?.value?.data;
 
-			return expandedItemsData;
+									// Update the item object with the data object
+									items[index].contentLink = {
+										...items[index].contentLink,
+										...subItemData
+									};
+
+									return items[index];
+								});
+						})
+						.catch((err) => {
+							this.reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while fetching and expanding items. Please try again later."}`);
+							return Promise.reject(err);
+						});
+				}
+			} else if (isObjectType(items)) {
+				const promises = [];
+
+				for (const [key, value] of Object.entries(items)) {
+					// Check if the item has an `contentLink.id` property
+					if (key === "id" && !isEmpty(value)) {
+						promises.push(await request.run({ url: `${this.site_url + CONTENT_ENDPOINT + value + "?expand=*"}`, method: "get", body, headers, reporter: this.reporter }));
+					}
+				}
+
+				if (!isEmpty(promises)) {
+					await Promise.allSettled(promises)
+						.then((res) => {
+							res
+								?.filter((subItem) => subItem?.status === "fulfilled")
+								?.map((subItem) => {
+									const subItemData = subItem?.value?.data;
+
+									// Update the item object with the data object
+									items.contentLink = {
+										...items.contentLink,
+										...subItemData
+									};
+
+									return items;
+								});
+						})
+						.catch((err) => {
+							this.reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while fetching and expanding items. Please try again later."}`);
+							return Promise.reject(err);
+						});
+				}
+			}
+
+			return items;
 		};
 
 		/**
@@ -99,214 +135,121 @@ export class Optimizely {
 		 * @param {Array} blocks
 		 * @returns {Array} Expanded content blocks
 		 */
-		const handleExpandContentBlocks = async (blocks = []) => {
-			const expandedBlocksData = await Promise.allSettled(
-				blocks?.map(async (block = {}) => {
-					try {
-						// Shallow copy of the block
-						let tempBlock = { ...block };
+		const handleExpandContentBlocks = async (blocks) => {
+			for (let i = 0; i < blocks.length; i++) {
+				const block = Object.assign({}, blocks[i]);
 
-						// Check if the block has an expanded property
-						if (!isEmpty(tempBlock?.contentLink?.expanded)) {
-							const { dynamicStyles = null, items = null, images = null, form = null } = tempBlock.contentLink.expanded;
+				const blockImageElementArrays = ["images", "items", "productImages", "dynamicStyles"];
+				const blockImageElementObjects = ["form", "image", "image1", "image2", "headerImage", "listImage", "secondaryListImage", "topImage", "secondary"];
 
-							// If the block has a `dynamicStyles` property, expand it
-							if (isArrayType(dynamicStyles) && !isEmpty(dynamicStyles)) {
-								const expandedDynamicStyles = await handleExpandKeyValues(dynamicStyles);
-
-								tempBlock.contentLink.expanded.dynamicStyles = expandedDynamicStyles;
-
-								// Compare the expanded block with the original block
-								if (!isEqual(tempBlock.contentLink.expanded.dynamicStyles, expandedDynamicStyles)) {
-									// If the block is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-
-							// If the block has a `items` property, expand it
-							if (isArrayType(items) && !isEmpty(items)) {
-								const expandedItems = await handleExpandKeyValues(items);
-
-								tempBlock.contentLink.expanded.items = expandedItems;
-
-								// Compare the expanded block with the original block
-								if (!isEqual(tempBlock.contentLink.expanded.items, expandedItems)) {
-									// If the block is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-
-							// If the block has a `images` property, expand it
-							if (isArrayType(images) && !isEmpty(images)) {
-								const expandedImages = await handleExpandKeyValues(images);
-
-								tempBlock.contentLink.expanded.images = expandedImages;
-
-								// Compare the expanded block with the original block
-								if (!isEqual(tempBlock.contentLink.expanded.images, expandedImages)) {
-									// If the block is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-
-							// If the block has a `form` property, expand it
-							if (isArrayType(form) && !isEmpty(form)) {
-								const expandedForm = await handleExpandKeyValues(form);
-
-								tempBlock.contentLink.expanded.form = expandedForm;
-
-								// Compare the expanded block with the original block
-								if (!isEqual(tempBlock.contentLink.expanded.form, expandedForm)) {
-									// If the block is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempBlock?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-						}
-
-						// Return the expanded block
-						return Promise.resolve(tempBlock);
-					} catch (err) {
-						this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-						return Promise.reject(err);
-					}
-				})
-			)
-				.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value))
-				.catch((err) => {
-					this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-
-					// Return the error
-					return err;
-				});
-
-			return expandedBlocksData;
-		};
-
-		if ((isArrayType(data) || isObjectType(data)) && !isEmpty(data) && endpoint !== AUTH_ENDPOINT) {
-			if (isArrayType(data)) {
-				const expandedData = await Promise.allSettled(
-					data?.map(async (item = {}) => {
-						try {
-							// Shallow copy of the item
-							const tempItem = { ...item };
-
-							// Check if the item has a content block properties
-							const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
-
-							// If the item has a content blocks property, fetch the content blocks data and expand its properties
-							if (isArrayType(contentBlocks) && !isEmpty(contentBlocks)) {
-								const expandedContentBlocks = await handleExpandContentBlocks(contentBlocks);
-
-								// Update the content blocks property with the expanded data
-								tempItem.contentBlocks = expandedContentBlocks;
-
-								// Compare the expanded item with the original item
-								if (!isEqual(tempItem.contentBlocks, expandedContentBlocks)) {
-									// If the item is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-
-							// If the item has a content blocks top property, fetch the content blocks data and expand its properties
-							if (isArrayType(contentBlocksTop) && !isEmpty(contentBlocksTop)) {
-								const expandedContentBlocksTop = await handleExpandContentBlocks(contentBlocksTop);
-
-								// Update the content blocks top property with the expanded data
-								tempItem.contentBlocksTop = expandedContentBlocksTop;
-
-								// Compare the expanded item with the original item
-								if (!isEqual(tempItem.contentBlocksTop, expandedContentBlocksTop)) {
-									// If the item is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-
-							// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
-							if (isArrayType(contentBlocksBottom) && !isEmpty(contentBlocksBottom)) {
-								const expandedContentBlocksBottom = await handleExpandContentBlocks(contentBlocksBottom);
-
-								// Update the content blocks bottom property with the expanded data
-								tempItem.contentBlocksBottom = expandedContentBlocksBottom;
-
-								// Compare the expanded item with the original item
-								if (!isEqual(tempItem.contentBlocksBottom, expandedContentBlocksBottom)) {
-									// If the item is expanded, display a success message
-									this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-								}
-							}
-
-							// Return the expanded item
-							return Promise.resolve(tempItem);
-						} catch (err) {
-							this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-
-							// Return the error
-							return Promise.reject(err);
+				// Check block for available blockImageElementArrays
+				await Promise.allSettled(
+					blockImageElementArrays.map(async (element) => {
+						if (!isEmpty(block?.contentLink?.expanded?.[element])) {
+							block.contentLink.expanded[element] = await handleExpandKeyValues(block.contentLink.expanded[element]);
 						}
 					})
+				);
+
+				// Check block for available blockImageElementObjects
+				await Promise.allSettled(
+					blockImageElementObjects.map(async (element) => {
+						if (!isEmpty(block?.contentLink?.expanded?.[element])) {
+							block.contentLink.expanded[element] = await handleExpandKeyValues(block.contentLink.expanded[element]);
+						}
+					})
+				);
+
+				// Update the block with the expanded properties
+				blocks[i] = block;
+			}
+
+			return blocks;
+		};
+
+		if (endpoint !== AUTH_ENDPOINT) {
+			if (!isEmpty(data) && isArrayType(data)) {
+				const expandedData = await Promise.allSettled(
+					data.map(async (item) => {
+						const temp = Object.assign({}, item);
+
+						// If the item has a content blocks property, fetch the content blocks data and expand its properties
+						if (!isEmpty(temp.contentBlocks)) {
+							let expandedContentBlocks = await handleExpandContentBlocks(temp.contentBlocks);
+
+							if (!isEmpty(expandedContentBlocks)) {
+								// Update the content blocks property with the expanded data
+								temp.contentBlocks = expandedContentBlocks;
+							}
+						}
+
+						// If the item has a content blocks top property, fetch the content blocks data and expand its properties
+						if (!isEmpty(temp.contentBlocksTop)) {
+							let expandedContentBlocksTop = await handleExpandContentBlocks(temp.contentBlocksTop);
+
+							if (!isEmpty(expandedContentBlocksTop)) {
+								// Update the content blocks top property with the expanded data
+								temp.contentBlocksTop = expandedContentBlocksTop;
+							}
+						}
+
+						// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
+						if (!isEmpty(temp.contentBlocksBottom)) {
+							let expandedContentBlocksBottom = await handleExpandContentBlocks(temp.contentBlocksBottom);
+
+							if (!isEmpty(expandedContentBlocksBottom)) {
+								// Update the content blocks bottom property with the expanded data
+								temp.contentBlocksBottom = expandedContentBlocksBottom;
+							}
+						}
+
+						return temp;
+					})
 				)
-					.then((res) => res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value) || res)
-					.catch((err) => err);
+					.then((res) => {
+						const data = res?.filter((item) => item?.status === "fulfilled")?.map((item) => item?.value) || null;
+						return Promise.resolve(data);
+					})
+					.catch((err) => {
+						this.reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred while expanding the content blocks. Please try again later."}`);
+						return err;
+					});
 
 				return expandedData;
-			} else {
-				try {
-					// Shallow copy of the item
-					const tempItem = { ...data };
+			} else if (!isEmpty(data) && isObjectType(data)) {
+				const temp = Object.assign({}, data);
 
-					// Check if the item has a content block properties
-					const { contentBlocks = null, contentBlocksTop = null, contentBlocksBottom = null } = tempItem;
+				// If the item has a content blocks property, fetch the content blocks data and expand its properties
+				if (!isEmpty(temp.contentBlocks)) {
+					let expandedContentBlocks = await handleExpandContentBlocks(temp.contentBlocks);
 
-					// If the item has a content blocks property, fetch the content blocks data and expand its properties
-					if (isArrayType(contentBlocks) && !isEmpty(contentBlocks)) {
-						const expandedContentBlocks = await handleExpandContentBlocks(contentBlocks);
-
+					if (!isEmpty(expandedContentBlocks)) {
 						// Update the content blocks property with the expanded data
-						tempItem.contentBlocks = expandedContentBlocks;
-
-						// Compare the expanded item with the original item
-						if (!isEqual(tempItem.contentBlocks, expandedContentBlocks)) {
-							// If the item is expanded, display a success message
-							this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-						}
+						temp.contentBlocks = expandedContentBlocks;
 					}
-
-					// If the item has a content blocks top property, fetch the content blocks data and expand its properties
-					if (isArrayType(contentBlocksTop) && !isEmpty(contentBlocksTop)) {
-						const expandedContentBlocksTop = await handleExpandContentBlocks(contentBlocksTop);
-
-						// Update the content blocks property with the expanded data
-						tempItem.contentBlocksTop = expandedContentBlocksTop;
-
-						// Compare the expanded item with the original item
-						if (!isEqual(tempItem.contentBlocksTop, expandedContentBlocksTop)) {
-							// If the item is expanded, display a success message
-							this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-						}
-					}
-
-					// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
-					if (isArrayType(contentBlocksBottom) && !isEmpty(contentBlocksBottom)) {
-						const expandedContentBlocksBottom = await handleExpandContentBlocks(contentBlocksBottom);
-
-						// Update the content blocks property with the expanded data
-						tempItem.contentBlocksBottom = expandedContentBlocksBottom;
-
-						// Compare the expanded item with the original item
-						if (!isEqual(tempItem.contentBlocksBottom, expandedContentBlocksBottom)) {
-							// If the item is expanded, display a success message
-							this.reporter.info(`[EXPANDED] ${`${this.site_url + CONTENT_ENDPOINT + tempItem?.contentLink?.id + "?expand=*"}`}`);
-						}
-					}
-
-					// Return the expanded item
-					return Promise.resolve(tempItem);
-				} catch (err) {
-					this.reporter.warn(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
-
-					// Return the error
-					return Promise.reject(err);
 				}
+
+				// If the item has a content blocks top property, fetch the content blocks data and expand its properties
+				if (!isEmpty(temp.contentBlocksTop)) {
+					let expandedContentBlocksTop = await handleExpandContentBlocks(temp.contentBlocksTop);
+
+					if (!isEmpty(expandedContentBlocksTop)) {
+						// Update the content blocks top property with the expanded data
+						temp.contentBlocksTop = expandedContentBlocksTop;
+					}
+				}
+
+				// If the item has a content blocks bottom property, fetch the content blocks data and expand its properties
+				if (!isEmpty(temp.contentBlocksBottom)) {
+					let expandedContentBlocksBottom = await handleExpandContentBlocks(temp.contentBlocksBottom);
+
+					if (!isEmpty(expandedContentBlocksBottom)) {
+						// Update the content blocks bottom property with the expanded data
+						temp.contentBlocksBottom = expandedContentBlocksBottom;
+					}
+				}
+
+				return temp;
 			}
 		} else return data;
 	}
@@ -318,11 +261,8 @@ export class Optimizely {
 	 * @param {Object} headers
 	 * @returns {Promise} Response promise
 	 */
-	async get({ url = null, body = null, headers = null, endpoint = null }) {
-		const results = await this.request({ url, method: "get", body, headers, endpoint })
-			.then((res) => res)
-			.catch((err) => err);
-
+	async get({ url, body, headers, endpoint }) {
+		const results = await this.request({ url, method: "get", body, headers, endpoint });
 		return results;
 	}
 
@@ -333,11 +273,8 @@ export class Optimizely {
 	 * @param {Object} headers
 	 * @returns {Promise} Response promise
 	 */
-	async post({ url = null, body = null, headers = null, endpoint = null }) {
-		const results = await this.request({ url, method: "post", body, headers, endpoint })
-			.then((res) => res)
-			.catch((err) => err);
-
+	async post({ url, body, headers, endpoint }) {
+		const results = await this.request({ url, method: "post", body, headers, endpoint });
 		return results;
 	}
 
@@ -362,6 +299,8 @@ export class Optimizely {
 				"Content-Type": AUTH_REQUEST_CONTENT_TYPE_HEADER
 			}
 		};
+
+		// TODO: Check and compare current time with the expiration time of the access token
 
 		const results = await this.post({ url: config.url, body: config.data, headers: config.headers, endpoint: AUTH_ENDPOINT });
 

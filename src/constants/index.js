@@ -6,7 +6,7 @@ export const IS_PROD = process.env.NODE_ENV === "production";
 export const APP_NAME = "@epicdesignlabs/gatsby-source-optimizely";
 
 // Cache
-export const CACHE_KEY = "@epicdesignlabs/gatsby-source-optimizely";
+export const CACHE_KEY = null;
 
 // Request
 export const REQUEST_URL_SLUG = "/api/episerver";

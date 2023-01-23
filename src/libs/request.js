@@ -102,11 +102,7 @@ export class Request {
 			this.pending_requests = Math.max(0, this.pending_requests > 0 ? this.pending_requests - 1 : 0);
 
 			// Send info message to console if request is successful
-			reporter.info(
-				`[${convertStringToUppercase(method)}] ${url} - (${res?.status} ${res?.statusText}) - (${res?.data?.length || Object.keys(res?.data)?.length || 0} ${
-					res?.data?.length === 1 || Object.keys(res?.data)?.length === 1 ? "item" : "items"
-				}) - (${this.pending_requests} pending ${this.pending_requests > 1 ? "requests" : "request"})`
-			);
+			reporter.info(`[${convertStringToUppercase(method)}] ${url} - (${res?.status} ${res?.statusText}) - (${this.pending_requests} pending ${this.pending_requests > 1 || this.pending_requests === 0 ? "requests" : "request"})`);
 
 			// Return response
 			return res;
