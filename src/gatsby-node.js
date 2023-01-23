@@ -12,6 +12,7 @@ import {
 	AUTH_HEADERS,
 	CACHE_KEY,
 	CORS_ORIGIN,
+	IS_DEV,
 	REQUEST_CONCURRENCY,
 	REQUEST_DEBOUNCE_INTERVAL,
 	REQUEST_RESPONSE_TYPE,
@@ -69,6 +70,7 @@ const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, repor
 				contentDigest: createContentDigest(stringifiedItem)
 			}
 		};
+
 		const node = { ...item, ...nodeMetadata };
 
 		await createNode(node)
@@ -175,7 +177,10 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 
 /**
  * @description Source and cache nodes from the Optimizely/Episerver API
+ * @param {Object} actions
  * @param {Object} reporter
+ * @param {Object} createNodeId
+ * @param {Object} createContentDigest
  * @param {Object} pluginOptions
  * @returns {Promise<void>} Node creation promise
  */
@@ -309,7 +314,7 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
 							"Authorization": `Bearer ${auth?.access_token}`,
 							"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
 						},
-						endpoint: nodeName || ""
+						endpoint: nodeName
 					});
 
 					// Resolve the promise
@@ -326,6 +331,7 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
 						sourceData = res;
 					}
 
+					// Create nodes from the cached data
 					sourceData
 						?.filter((item) => item?.status === "fulfilled")
 						?.map(async (item) => {
@@ -362,7 +368,16 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
 							}
 						});
 
-					return res;
+					// Cache the data when the data is available and the environment is development
+					if (!isEmpty(sourceData) || IS_DEV) {
+						await cache
+							.set(CACHE_KEY, sourceData)
+							.then(() => reporter.info(`[CACHE] Cached ${sourceData.length} items successfully.`))
+							.catch((err) => reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while caching the data. Please try again later."}`));
+					}
+
+					// Resolve the promise
+					return sourceData;
 				})
 				.catch((err) => {
 					this.reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while fetching and expanding the endpoints. Please try again later."}`);
