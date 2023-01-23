@@ -1,4 +1,3 @@
-/* eslint-disable no-unused-vars */
 "use strict";
 
 import { randomUUID } from "crypto";
@@ -21,6 +20,7 @@ import {
 } from "./constants";
 import { Optimizely } from "./libs/optimizely";
 import { convertObjectToString, convertStringToCamelCase } from "./utils/convertValues";
+import { getURLPathname } from "./utils/parseURL";
 import { isArrayType, isEmpty, isObjectType } from "./utils/typeCheck";
 
 /**
@@ -52,15 +52,15 @@ const handleCamelizeKeys = (obj) => {
  * @param {string} endpoint
  * @returns {Promise<void>} Node creation promise
  */
-const handleCreateNodeFromData = async (item = null, nodeType = null, helpers = {}, endpoint = null) => {
+const handleCreateNodeFromData = async (item, nodeType, helpers, endpoint, reporter) => {
 	const { createNode, createNodeId, createContentDigest } = helpers;
 
-	if (!isEmpty(item) && !isEmpty(nodeType)) {
-		const stringifiedItem = convertObjectToString(item);
+	if (!isEmpty(nodeType)) {
+		const stringifiedItem = !isEmpty(item) ? convertObjectToString(item) : "";
 		const uuid = randomUUID();
 
 		const nodeMetadata = {
-			id: createNodeId(`${uuid}-${nodeType}-${endpoint}`),
+			id: createNodeId(`${uuid}-${nodeType}-${getURLPathname(endpoint)}`),
 			parent: null,
 			children: [],
 			internal: {
@@ -73,18 +73,21 @@ const handleCreateNodeFromData = async (item = null, nodeType = null, helpers = 
 
 		await createNode(node)
 			.then(() => {
-				console.info(`[NODE] ${node?.internal?.contentDigest} - ${nodeType} - (OK)`);
-
-				return node;
+				reporter.info(`[NODE] ${node?.internal?.contentDigest} - ${nodeType} - (OK)`);
+				return Promise.resolve();
 			})
 			.catch((err) => {
-				console.error(`[NODE] ${node?.internal?.contentDigest} - ${nodeType} (FAIL)`);
-				console.error("\n", `${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`, "\n");
-
+				reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
 				return err;
 			});
 	}
 };
+
+/**
+ * @description Verify if plugin loaded correctly
+ * @returns {void}
+ */
+exports.onPreBootstrap = ({ reporter }) => reporter.info(`${APP_NAME} loaded successfully! 🎉`);
 
 /**
  * @description Validate the plugin options
@@ -171,20 +174,12 @@ exports.pluginOptionsSchema = ({ Joi }) =>
 	});
 
 /**
- * @description Verify if plugin loaded correctly
- * @returns {void}
- */
-exports.onPreInit = () => console.info("@epicdesignlabs/gatsby-source-optimizely loaded successfully!");
-
-/**
  * @description Source and cache nodes from the Optimizely/Episerver API
- * @param {Object} actions
- * @param {Object} createNodeId
- * @param {Object} createContentDigest
+ * @param {Object} reporter
  * @param {Object} pluginOptions
  * @returns {Promise<void>} Node creation promise
  */
-exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, createContentDigest }, pluginOptions) => {
+exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createNodeId, createContentDigest }, pluginOptions) => {
 	// Prepare plugin options
 	const {
 		auth: { site_url = null, username = null, password = null, grant_type = AUTH_GRANT_TYPE, client_id = AUTH_CLIENT_ID, headers = AUTH_HEADERS },
@@ -195,16 +190,6 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 		request_debounce_interval = REQUEST_DEBOUNCE_INTERVAL,
 		request_concurrency = REQUEST_CONCURRENCY
 	} = pluginOptions;
-
-	// Prepare node sourcing helpers
-	const helpers = {
-		createNode,
-		createContentDigest,
-		createNodeId
-	};
-
-	let cachedData = await cache.get(CACHE_KEY);
-	let sourceData = null;
 
 	// Create a new Optimizely instance
 	const optimizely = new Optimizely({
@@ -223,69 +208,99 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 		username,
 		password,
 		grant_type,
-		client_id
+		client_id,
+		reporter
 	});
 
-	// Authenticate with the Optimizely/Episerver
-	const auth = await optimizely.authenticate();
+	// Action helpers
+	const helpers = {
+		createNode,
+		createContentDigest,
+		createNodeId
+	};
 
 	/**
 	 * @description Handle node creation
-	 * @param {*} sourceData
+	 * @param {Array} node
+	 * @param {Object} reporter
+	 * @param {Object} helpers
 	 * @returns {Promise<void>} Node creation promise
 	 */
-	const handleNodeCreation = async (sourceData = null) => {
-		sourceData
-			?.filter(({ status = null, value: { nodeName = null, endpoint = null } }) => status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint))
-			?.map(async ({ status = null, value: { nodeName = null, data = null, endpoint = null } }) => {
-				// Check if the data was retrieved successfully
-				if (status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint) && !isEmpty(data)) {
-					// Handle camel casing of the data
-					const updatedData = await handleCamelizeKeys(data);
+	const handleNodeCreation = async (node, reporter, helpers) => {
+		try {
+			// Handle `stores` and `hotels` node data
+			if (node.nodeName === "OptimizelyStoresContent") {
+				node.data =
+					node.data?.Locations?.filter((location) => location?.LocationType === "Store")?.map((location) => {
+						return {
+							...location,
+							LocationType: "Store"
+						};
+					}) || null;
+			} else if (node.nodeName === "OptimizelyHotelsContent") {
+				node.data =
+					node.data?.Locations?.filter((location) => location?.LocationType === "Hotel")?.map((location) => {
+						return {
+							...location,
+							LocationType: "Hotel"
+						};
+					}) || null;
+			}
 
-					// Create nodes from the data
-					if (isArrayType(updatedData)) {
-						updatedData?.map(async (datum) => {
-							await handleCreateNodeFromData(datum, nodeName, helpers, datum?.contentLink?.url || site_url + endpoint);
-						});
-					} else {
-						await handleCreateNodeFromData(updatedData, nodeName, helpers, updatedData?.contentLink?.url || site_url + endpoint);
-					}
+			const updatedData = handleCamelizeKeys(node.data);
+
+			// Create nodes from the data
+			if (!isEmpty(updatedData)) {
+				if (isArrayType(updatedData)) {
+					updatedData?.map(async (datum) => {
+						await handleCreateNodeFromData(datum, node.nodeName, helpers, datum?.contentLink?.url || site_url + node.endpoint, reporter);
+
+						return Promise.resolve(datum);
+					});
+				} else if (isObjectType(updatedData)) {
+					await handleCreateNodeFromData(updatedData, node.nodeName, helpers, updatedData?.contentLink?.url || site_url + node.endpoint, reporter);
+
+					return Promise.resolve(updatedData);
+				} else {
+					return Promise.resolve(updatedData);
 				}
-
-				// Resolve the promise
-				return;
-			}) || null;
-
-		// Cache the data
-		await cache.set(CACHE_KEY, sourceData).catch((err) => console.error(`[ERROR] ${err?.message} || ${convertObjectToString(err)} || "An error occurred while caching the data. Please try again later."`));
-
-		console.info(`${APP_NAME} task processing complete!`);
-
-		// Resolve the promise
-		return sourceData;
+			}
+		} catch (err) {
+			reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred while creating nodes. Please try again later."}`);
+			return err;
+		}
 	};
 
-	if (!isEmpty(auth?.access_token)) {
-		// Send log message to console if authentication was successful
-		console.info(`[AUTH] ${convertObjectToString(auth?.access_token)}`);
+	// Check if the plugin stored the data in the cache
+	const cachedData = await cache.get(CACHE_KEY);
+	let sourceData = null;
 
-		if (!isEmpty(cachedData)) {
-			// Send log message to console if the cached data is available
-			console.warn(`[CACHE] Current cache is available. Proceeding to node creation...`);
+	if (!isEmpty(cachedData)) {
+		// Send log message to reporter if the cached data is available
+		reporter.warn(`[CACHE] Cached data found. Proceeding to node creation...`);
 
-			// Create nodes from the cached data
-			await handleNodeCreation(cachedData);
+		// Create nodes from the cached data
+		cachedData
+			?.filter((item) => item?.status === "fulfilled")
+			?.map(async (item) => {
+				const resData = item?.value;
 
-			// Resolve the promise
-			return cachedData;
-		} else {
-			// Send log message to console if the cached data is not available
-			console.warn(`[CACHE] Current cache is not available. Proceeding to source data...`);
+				await handleNodeCreation(resData, reporter, helpers);
+			});
+	} else {
+		// Send log message to reporter if the cached data is not available
+		reporter.warn(`[CACHE] No cached data found. Proceeding to data sourcing...`);
+
+		// Authenticate with the Optimizely/Episerver
+		const auth = await optimizely.authenticate();
+
+		if (!isEmpty(auth?.access_token)) {
+			// Send log message to reporter if authentication was successful
+			reporter.info(`[AUTH] ${convertObjectToString(auth?.access_token)}`);
 
 			await Promise.allSettled(
-				endpoints?.map(async ({ nodeName = null, endpoint = null }) => {
-					const url = site_url + endpoint;
+				endpoints.map(async ({ nodeName = null, endpoint = null }) => {
+					const url = site_url + endpoint || "";
 
 					const results = await optimizely.get({
 						url,
@@ -294,78 +309,405 @@ exports.sourceNodes = async ({ actions: { createNode }, cache, createNodeId, cre
 							"Authorization": `Bearer ${auth?.access_token}`,
 							"Access-Control-Allow-Credentials": ACCESS_CONTROL_ALLOW_CREDENTIALS
 						},
-						endpoint: nodeName
+						endpoint: nodeName || ""
 					});
 
 					// Resolve the promise
 					return {
 						nodeName,
-						data: !isEmpty(results) && !isEmpty(nodeName) ? (nodeName === "OptimizelyStoreContent" || nodeName === "OptimizelyHotelContent" ? results?.Locations : results) : null,
+						data: results || null,
 						endpoint
 					};
-				}) || null
+				})
 			)
 				.then(async (res) => {
 					// Store the data in the cache
 					if (!isEmpty(res)) {
-						const tempRes = res;
+						sourceData = res;
+					}
 
-						tempRes.map(async (item) => {
-							const tempItem = item;
-
-							const {
-								status = null,
-								value: { nodeName = null, data = null, endpoint = null }
-							} = tempItem;
-
-							if (status === "fulfilled" && !isEmpty(nodeName) && !isEmpty(endpoint) && !isEmpty(data)) {
-								if (nodeName === "OptimizelyStoresContent") {
-									tempItem.value.data = data?.Locations?.filter((location) => location.LocationType === "Store")?.map((location) => {
-										return {
-											...location,
-											LocationType: "Store"
+					sourceData
+						?.filter((item) => item?.status === "fulfilled")
+						?.map(async (item) => {
+							if (isArrayType(item.value.data)) {
+								if (item.value.nodeName === "OptimizelyStoreContent" || item.value.nodeName === "OptimizelyHotelContent") {
+									item.value.data?.Locations?.map(async (datum) => {
+										const data = {
+											nodeName: item.value.nodeName,
+											data: datum,
+											endpoint: item.value.endpoint
 										};
+
+										await handleNodeCreation(data, reporter, helpers);
 									});
-								} else if (nodeName === "OptimizelyHotelsContent") {
-									tempItem.value.data = data?.Locations?.filter((location) => location.LocationType === "Hotel")?.map((location) => {
-										return {
-											...location,
-											LocationType: "Hotel"
+								} else {
+									item.value.data?.map(async (datum) => {
+										const data = {
+											nodeName: item.value.nodeName,
+											data: datum,
+											endpoint: item.value.endpoint
 										};
+
+										await handleNodeCreation(data, reporter, helpers);
 									});
+								}
+							} else {
+								const data = {
+									nodeName: item.value.nodeName,
+									data: item?.value?.data || null,
+									endpoint: item.value.endpoint
+								};
+
+								await handleNodeCreation(data, reporter, helpers);
+							}
+						});
+
+					return res;
+				})
+				.catch((err) => {
+					this.reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "There was an error while fetching and expanding the endpoints. Please try again later."}`);
+					return err;
+				});
+		} else {
+			// Send error message to reporter if an error occurred
+			throw new Error(`[AUTH] API authentication failed. Please check your credentials and try again.`);
+		}
+	}
+};
+
+/**
+ * @description Perform image optimizations on each node created
+ * @param {Object} node
+ * @param {Object} actions
+ * @param {Object} store
+ * @param {Object} cache
+ * @param {Object} reporter
+ * @returns {void}
+ */
+exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, reporter, getCache }) => {
+	if (node.internal.type?.includes("Optimizely")) {
+		await Promise.allSettled(
+			Object.keys(node)?.map(async (key) => {
+				const contentBlocks = ["contentBlocks", "contentBlocksTop", "contentBlocksBottom"];
+				const blockImageElementObjects = ["image", "secondary", "image1", "image2", "headerImage", "listImage", "secondaryListImage", "topImage"];
+				const blockImageElementArrays = ["images", "items", "productImages"];
+
+				const isContentBlock = contentBlocks.includes(key);
+				const isBlockImageElementObject = blockImageElementObjects.includes(key);
+				const isBlockImageElementArray = blockImageElementArrays.includes(key);
+
+				const imageRegex = /[^\s]+(.*?).(svg|gif|SVG|GIF)$/;
+				const localNodes = [];
+
+				/**
+				 * @description Handle image file node creation
+				 * @param {Object} data
+				 * @returns {Array} localNodes
+				 */
+				const handleImageFileNodeCreation = async (data) => {
+					const fields = [];
+
+					let fileNode = null;
+
+					if (!isEmpty(data)) {
+						for (let i = 0; i < data?.length; i++) {
+							fileNode = await createRemoteFileNode({
+								url: data[i],
+								parentNodeId: node.id,
+								createNode,
+								createNodeId: () => `${data[i]}`,
+								getCache
+							});
+
+							if (fileNode?.id) {
+								fields.push(fileNode.id);
+							}
+						}
+					}
+
+					return Promise.resolve(fields);
+				};
+
+				/**
+				 * @description Handle block image element arrays
+				 * @param {Array} data
+				 * @param {String} key
+				 * @param {String} type
+				 * @returns {*} Updated block image element array
+				 */
+				const handleBlockImageElementArrays = async (data, key, type) => {
+					const fields1 = [];
+					const fields2 = [];
+					const fields3 = [];
+					const fields4 = [];
+
+					try {
+						for (let i = 0; i < data?.length; i++) {
+							const image1 = data[i]?.contentLink?.expanded?.contentLink?.url?.length > 0 && !imageRegex.test(data[i]?.contentLink?.expanded?.contentLink?.url) && data[i].contentLink.expanded.contentLink.url;
+							const image2 = data[i]?.expanded?.contentLink?.url?.length > 0 && !imageRegex.test(data[i]?.expanded?.contentLink?.url) && data[i].expanded.contentLink.url;
+							const image3 = data[i]?.url?.length > 0 && !imageRegex.test(data[i]?.url) && data[i].url;
+							const image4 = data[i]?.length > 0 && !imageRegex.test(data[i]) && data[i];
+
+							if (!isEmpty(image1)) {
+								fields1.push(image1);
+							}
+
+							if (!isEmpty(image2)) {
+								fields2.push(image2);
+							}
+
+							if (!isEmpty(image3)) {
+								fields3.push(image3);
+							}
+
+							if (!isEmpty(image4)) {
+								fields4.push(image4);
+							}
+						}
+
+						if (!isEmpty(fields1)) {
+							const field1Data = await handleImageFileNodeCreation(fields1);
+
+							if (!isEmpty(field1Data)) {
+								localNodes.push({
+									type,
+									key,
+									data: field1Data
+								});
+
+								return localNodes;
+							}
+						}
+
+						if (!isEmpty(fields2)) {
+							const field2Data = await handleImageFileNodeCreation(fields2);
+
+							if (!isEmpty(field2Data)) {
+								localNodes.push({
+									type,
+									key,
+									data: field2Data
+								});
+
+								return localNodes;
+							}
+						}
+
+						if (!isEmpty(fields3)) {
+							const field3Data = await handleImageFileNodeCreation(fields3);
+
+							if (!isEmpty(field3Data)) {
+								localNodes.push({
+									type,
+									key,
+									data: field3Data
+								});
+
+								return localNodes;
+							}
+						}
+
+						if (!isEmpty(fields4)) {
+							const field4Data = await handleImageFileNodeCreation(fields4);
+
+							if (!isEmpty(field4Data)) {
+								localNodes.push({
+									type,
+									key,
+									data: field4Data
+								});
+
+								return localNodes;
+							}
+						}
+
+						return localNodes;
+					} catch (err) {
+						reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+						return err;
+					}
+				};
+
+				/**
+				 * @description Handle block image element objects
+				 * @param {*} data
+				 * @param {String} key
+				 * @param {String} type
+				 * @returns {Object} Updatd block image element object
+				 */
+				const handleBlockImageElementObjects = async (data, key, type) => {
+					const fields1 = [];
+					const fields2 = [];
+					const fields3 = [];
+					const fields4 = [];
+
+					try {
+						if (!isEmpty(data)) {
+							if (isObjectType(data)) {
+								const image1 = data?.contentLink?.expanded?.contentLink?.url?.length > 0 && !imageRegex.test(data?.contentLink?.expanded?.contentLink?.url) && data.contentLink.expanded.contentLink.url;
+								const image2 = data?.expanded?.contentLink?.url?.length > 0 && !imageRegex.test(data?.expanded?.contentLink?.url) && data.expanded.contentLink.url;
+								const image3 = data?.url?.length > 0 && !imageRegex.test(data?.url) && data.url;
+								const image4 = data?.length > 0 && !imageRegex.test(data) && data;
+
+								if (!isEmpty(image1)) {
+									fields1.push(image1);
+								}
+
+								if (!isEmpty(image2)) {
+									fields2.push(image2);
+								}
+
+								if (!isEmpty(image3)) {
+									fields3.push(image3);
+								}
+
+								if (!isEmpty(image4)) {
+									fields4.push(image4);
+								}
+							} else if (isArrayType(data)) {
+								for (let i = 0; i < data.length; i++) {
+									const image1 = data[i]?.contentLink?.expanded?.contentLink?.url?.length > 0 && !imageRegex.test(data[i]?.contentLink?.expanded?.contentLink?.url) && data[i].contentLink.expanded.contentLink.url;
+									const image2 = data[i]?.expanded?.contentLink?.url?.length > 0 && !imageRegex.test(data[i]?.expanded?.contentLink?.url) && data[i].expanded.contentLink.url;
+									const image3 = data[i]?.url?.length > 0 && !imageRegex.test(data[i]?.url) && data[i].url;
+									const image4 = data[i]?.length > 0 && !imageRegex.test(data[i]) && data[i];
+
+									if (!isEmpty(image1)) {
+										fields1.push(image1);
+									}
+
+									if (!isEmpty(image2)) {
+										fields2.push(image2);
+									}
+
+									if (!isEmpty(image3)) {
+										fields3.push(image3);
+									}
+
+									if (!isEmpty(image4)) {
+										fields4.push(image4);
+									}
 								}
 							}
 
-							item = tempItem;
+							if (!isEmpty(fields1)) {
+								const field1Data = await handleImageFileNodeCreation(fields1, key, type);
 
-							return item;
-						});
+								if (!isEmpty(field1Data)) {
+									localNodes.push({
+										type,
+										key,
+										data: field1Data
+									});
 
-						sourceData = tempRes;
+									return localNodes;
+								}
+							}
+
+							if (!isEmpty(fields2)) {
+								const field2Data = await handleImageFileNodeCreation(fields2, key, type);
+
+								if (!isEmpty(field2Data)) {
+									localNodes.push({
+										type,
+										key,
+										data: field2Data
+									});
+
+									return localNodes;
+								}
+							}
+
+							if (!isEmpty(fields3)) {
+								const field3Data = await handleImageFileNodeCreation(fields3, key, type);
+
+								if (!isEmpty(field3Data)) {
+									localNodes.push({
+										type,
+										key,
+										data: field3Data
+									});
+
+									return localNodes;
+								}
+							}
+
+							if (!isEmpty(fields4)) {
+								const field4Data = await handleImageFileNodeCreation(fields4, key, type);
+
+								if (!isEmpty(field4Data)) {
+									localNodes.push({
+										type,
+										key,
+										data: field4Data
+									});
+
+									return localNodes;
+								}
+							}
+						}
+					} catch (err) {
+						reporter.error(`[ERROR] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+						return err;
 					}
+				};
 
-					// Create nodes from the cached data
-					await handleNodeCreation(sourceData);
+				if (isBlockImageElementArray) {
+					// Check if node has the key from blockImageElementArrays and if it is not empty
+					await Promise.allSettled(blockImageElementArrays.filter((imageKey) => !isEmpty(node[imageKey])).map(async (imageKey) => await handleBlockImageElementArrays(node[imageKey], imageKey, node.internal.type)));
+				} else if (isBlockImageElementObject) {
+					// Check if node has the key from blockImageElementObjects and if it is not empty
+					await Promise.allSettled(blockImageElementObjects.filter((imageKey) => !isEmpty(node[imageKey])).map(async (imageKey) => await handleBlockImageElementObjects(node[imageKey], imageKey, node.internal.type)));
+				} else if (isContentBlock) {
+					// Check if node has the key from contentBlocks and if it is not empty
+					await Promise.allSettled(
+						contentBlocks
+							.filter((contentBlockKey) => !isEmpty(node[contentBlockKey]))
+							.map((contentBlockKey) => {
+								node[contentBlockKey]
+									?.filter((contentBlock) => !isEmpty(contentBlock?.contentLink?.expanded))
+									?.map(async (contentBlock) => {
+										if (!isEmpty(contentBlock?.contentLink?.expanded)) {
+											await Promise.allSettled(
+												Object.keys(contentBlock?.contentLink?.expanded)?.map(async (expandedData) => {
+													// Check if node has the key from blockImageElementObjects and if it is not empty
+													if (blockImageElementObjects.includes(expandedData)) {
+														await Promise.allSettled(
+															blockImageElementObjects
+																.filter((imageKey) => !isEmpty(contentBlock.contentLink.expanded[imageKey]))
+																.map(async (imageKey) => await handleBlockImageElementObjects(contentBlock.contentLink.expanded[imageKey], imageKey, node.internal.type))
+														);
+													}
 
-					// Resolve the promise
-					return sourceData;
-				})
-				.catch((err) => {
-					// Send log message to console if an error occurred
-					console.error(`[GET] ${err?.message || convertObjectToString(err) || "An error occurred. Please try again later."}`);
+													// Check if node has the key from blockImageElementArrays and if it is not empty
+													if (blockImageElementArrays.includes(expandedData)) {
+														await Promise.allSettled(
+															blockImageElementArrays
+																.filter((imageKey) => !isEmpty(contentBlock.contentLink.expanded[imageKey]))
+																.map(async (imageKey) => await handleBlockImageElementArrays(contentBlock.contentLink.expanded[imageKey], imageKey, node.internal.type))
+														);
+													}
+												})
+											);
+										}
+									});
+							})
+					);
+				}
 
-					// Reject the promise
-					return err;
-				});
-		}
+				if (localNodes.length > 0) {
+					reporter.info(`[FILE] ${node.internal.contentDigest} - ${node.internal.type} - ${localNodes.length} local file ${localNodes.length > 1 ? "nodes" : "node"} created`);
 
-		return;
-	} else {
-		// Send error message to console if an error occurred
-		console.error(`[AUTH] API authentication failed. Please check your credentials and try again.`);
+					createNodeField({
+						node,
+						name: "localFiles",
+						value: localNodes[0].data
+					});
+				}
+
+				return node;
+			})
+		);
 	}
-
-	return;
 };
 
 /**
@@ -379,10 +721,10 @@ exports.createSchemaCustomization = ({ actions: { createTypes } }, pluginOptions
 	const { globals: { schema = null } = null, endpoints = [] } = pluginOptions;
 
 	if (!isEmpty(endpoints)) {
-		endpoints?.map(({ nodeName = null, schema = null }) => {
-			if (!isEmpty(nodeName) && !isEmpty(schema)) {
+		endpoints?.forEach((endpoint) => {
+			if (!isEmpty(endpoint?.nodeName) && !isEmpty(endpoint?.schema)) {
 				typeDefs += `
-					${schema}
+					${endpoint.schema}
 				`;
 			}
 		});
@@ -404,141 +746,7 @@ exports.createSchemaCustomization = ({ actions: { createTypes } }, pluginOptions
 };
 
 /**
- * @description Perform image optimizations on each node created
- * @param {Object} node
- * @param {Object} actions
- * @param {Object} store
- * @param {Object} cache
- * @param {Object} reporter
+ * @description Verify if plugin ended successfully
  * @returns {void}
  */
-exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, getCache }) => {
-	if (node.internal.type.includes("Optimizely")) {
-		const contentBlocks = ["contentBlocks", "contentBlocksTop", "contentBlocksBottom"];
-		const blockImageElementObjects = ["image", "secondary", "image1", "image2", "headerImage", "listImage", "secondaryListImage", "topImage"];
-		const blockImageElementArrays = ["images", "items", "productImages"];
-
-		Object.keys(node)?.map(async (key) => {
-			await Promise.all(
-				contentBlocks
-					?.filter((contentBlock) => contentBlock?.includes(key))
-					?.map(() => {
-						node?.[key]?.map((block) => {
-							const {
-								contentLink: { expanded }
-							} = block;
-
-							Object.keys(expanded)?.map((expandedKey) => {
-								// Check for keys that contain image objects
-								blockImageElementObjects
-									?.filter((imageElement) => expandedKey === imageElement)
-									?.map(async () => {
-										await createRemoteFileNode({
-											url:
-												expanded?.[expandedKey]?.contentLink?.expanded?.contentLink?.url ||
-												expanded?.[expandedKey]?.contentLink?.expanded?.url ||
-												expanded?.[expandedKey]?.expanded?.url ||
-												expanded?.[expandedKey]?.url ||
-												expanded?.[expandedKey],
-											parentNodeId: node.id,
-											createNode,
-											createNodeId: () =>
-												`${node.id}-${key}-items--${
-													expanded?.[expandedKey]?.contentLink?.expanded?.contentLink?.url ||
-													expanded?.[expandedKey]?.contentLink?.expanded?.url ||
-													expanded?.[expandedKey]?.expanded?.url ||
-													expanded?.[expandedKey]?.url ||
-													expanded?.[expandedKey]
-												}`,
-											getCache
-										});
-									});
-
-								// Check for keys that contain image objects
-								blockImageElementArrays
-									?.filter((imageElement) => expandedKey === imageElement)
-									?.map(() => {
-										expanded?.[expandedKey]?.map(async (image) => {
-											await Promise.allSettled(
-												blockImageElementObjects
-													?.filter((imageElement) => Object.keys(image)?.includes(imageElement))
-													?.map(
-														async (imageElement) =>
-															await createRemoteFileNode({
-																url:
-																	image?.[imageElement]?.contentLink?.expanded?.contentLink?.url ||
-																	image?.[imageElement]?.contentLink?.expanded?.url ||
-																	image?.[imageElement]?.expanded?.url ||
-																	image?.[imageElement]?.url ||
-																	image?.[imageElement],
-																parentNodeId: node.id,
-																createNode,
-																createNodeId: () =>
-																	`${node.id}-${key}-items--${
-																		image?.[imageElement]?.contentLink?.expanded?.contentLink?.url ||
-																		image?.[imageElement]?.contentLink?.expanded?.url ||
-																		image?.[imageElement]?.expanded?.url ||
-																		image?.[imageElement]?.url ||
-																		image?.[imageElement]
-																	}`,
-																getCache
-															})
-													)
-											)
-												.then((res) => res)
-												.catch((err) => err);
-										});
-
-										return expanded?.[expandedKey];
-									});
-
-								return expanded;
-							});
-
-							return block;
-						});
-
-						return node;
-					})
-			);
-
-			await Promise.all(
-				blockImageElementObjects
-					?.filter((imageElement) => key === imageElement)
-					?.map(async () => {
-						await createRemoteFileNode({
-							url: node[key]?.contentLink?.expanded?.contentLink?.url || node[key]?.expanded?.contentLink?.url || node[key]?.expanded?.url || node[key]?.url || node[key],
-							parentNodeId: node.id,
-							createNode,
-							createNodeId: () => `${node.id}-${key}--${node[key]?.contentLink?.expanded?.contentLink?.url || node[key]?.expanded?.contentLink?.url || node[key]?.expanded?.url || node[key]?.url || node[key]}`,
-							getCache
-						});
-					})
-			);
-
-			await Promise.all(
-				blockImageElementArrays
-					?.filter((imageElement) => key === imageElement)
-					?.map(async () => {
-						await Promise.all(
-							node?.[key]?.map(
-								async (element) =>
-									await createRemoteFileNode({
-										url: element?.contentLink?.expanded?.contentLink?.url || element?.expanded?.contentLink?.url || element?.expanded?.url || element?.url || element,
-										parentNodeId: node.id,
-										createNode,
-										createNodeId: () => `
-											${node.id}-${key}-items--${element?.contentLink?.expanded?.contentLink?.url || element?.expanded?.contentLink?.url || element?.expanded?.url || element?.url || element}`,
-										getCache
-									})
-							)
-						)
-							.then((res) => res)
-							.catch((err) => err);
-
-						return node;
-					})
-			);
-		});
-	}
-};
+exports.onPostBootstrap = ({ reporter }) => reporter.info(`${APP_NAME} tasks complete! 🎉`);
