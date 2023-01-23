@@ -23,8 +23,9 @@ Provide support for the following features:
 - Data caching on subsequent `gatsby` source plugin runs
 - Request timeouts in all `optimizely/episerver` API requests
 - Throttling, debouncing, and adjusting the number of concurrent `optimizely/episerver` API requests
-- Add support for `expanded` data on some content blocks: `images`, `dynamicStyles`, `items`, `form` key fields are currently supported with more to come in the future
+- Add support for `expanded` data on some content blocks: `images`, `dynamicStyles`, `items`, `form`, `image1`, `image` key fields are currently supported with more to come in the future
 - Option for opting out of type inference for `optimizely/episerver` API `gatsby` nodes or add custom `gatsby` node schemas for `optimizely/episerver` API `gatsby` nodes
+<!-- - Image optimizations for `optimizely/episerver` API `gatsby` nodes with `localFile` as the `gatsby` node field -->
 
 ## Installation and Setup
 
