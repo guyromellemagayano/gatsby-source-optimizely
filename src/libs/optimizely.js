@@ -80,8 +80,8 @@ export class Optimizely {
 									const subItemData = subItem?.value?.data;
 
 									// Update the item object with the data object
-									items[index].contentLink = {
-										...items[index].contentLink,
+									items[index] = {
+										...items[index],
 										...subItemData
 									};
 
@@ -112,8 +112,8 @@ export class Optimizely {
 									const subItemData = subItem?.value?.data;
 
 									// Update the item object with the data object
-									items.contentLink = {
-										...items.contentLink,
+									items = {
+										...items,
 										...subItemData
 									};
 

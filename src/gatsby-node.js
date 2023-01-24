@@ -286,9 +286,37 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
 		cachedData
 			?.filter((item) => item?.status === "fulfilled")
 			?.map(async (item) => {
-				const resData = item?.value;
+				if (isArrayType(item.value.data)) {
+					if (item.value.nodeName === "OptimizelyStoreContent" || item.value.nodeName === "OptimizelyHotelContent") {
+						item.value.data?.Locations?.map(async (datum) => {
+							const data = {
+								nodeName: item.value.nodeName,
+								data: datum,
+								endpoint: item.value.endpoint
+							};
 
-				await handleNodeCreation(resData, reporter, helpers);
+							await handleNodeCreation(data, reporter, helpers);
+						});
+					} else {
+						item.value.data?.map(async (datum) => {
+							const data = {
+								nodeName: item.value.nodeName,
+								data: datum,
+								endpoint: item.value.endpoint
+							};
+
+							await handleNodeCreation(data, reporter, helpers);
+						});
+					}
+				} else {
+					const data = {
+						nodeName: item.value.nodeName,
+						data: item.value?.data || null,
+						endpoint: item.value.endpoint
+					};
+
+					await handleNodeCreation(data, reporter, helpers);
+				}
 			});
 	} else {
 		// Send log message to reporter if the cached data is not available
@@ -406,6 +434,8 @@ exports.sourceNodes = async ({ actions: { createNode }, reporter, cache, createN
  */
 exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, reporter, getCache }) => {
 	if (node.internal.type?.includes("Optimizely")) {
+		const localNodes = [];
+
 		await Promise.allSettled(
 			Object.keys(node)?.map(async (key) => {
 				const contentBlocks = ["contentBlocks", "contentBlocksTop", "contentBlocksBottom"];
@@ -417,7 +447,6 @@ exports.onCreateNode = async ({ node, actions: { createNode, createNodeField }, 
 				const isBlockImageElementArray = blockImageElementArrays.includes(key);
 
 				const imageRegex = /[^\s]+(.*?).(svg|gif|SVG|GIF)$/;
-				const localNodes = [];
 
 				/**
 				 * @description Handle image file node creation
