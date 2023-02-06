@@ -35,13 +35,11 @@ For `npm`:
 
 ```console
 npm install gatsby-source-optimizely
-npm install gatsby-source-optimizely
 ```
 
 For `yarn`:
 
 ```console
-yarn add gatsby-source-optimizely
 yarn add gatsby-source-optimizely
 ```
 
@@ -55,7 +53,6 @@ module.exports = {
     // ...
 
     {
-      resolve: "gatsby-source-optimizely",
       resolve: "gatsby-source-optimizely",
       options: {
         auth: {
