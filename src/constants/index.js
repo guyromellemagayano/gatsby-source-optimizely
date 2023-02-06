@@ -3,7 +3,7 @@ export const IS_DEV = process.env.NODE_ENV === "development";
 export const IS_PROD = process.env.NODE_ENV === "production";
 
 // App
-export const APP_NAME = "@epicdesignlabs/gatsby-source-optimizely";
+export const APP_NAME = "gatsby-source-optimizely";
 
 // Cache
 export const CACHE_KEY = null;
