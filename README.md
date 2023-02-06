@@ -1,7 +1,5 @@
 # gatsby-source-optimizely
 
-# gatsby-source-optimizely
-
 This unofficial source plugin makes Optimizely/Episerver API data available in GatsbyJS sites. Currently in active development.
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
