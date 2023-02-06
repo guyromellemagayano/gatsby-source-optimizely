@@ -1,17 +1,17 @@
-# @epicdesignlabs/gatsby-source-optimizely
+# gatsby-source-optimizely
 
 This unofficial source plugin makes Optimizely/Episerver API data available in GatsbyJS sites. Currently in active development.
 
 [![Commitizen friendly](https://img.shields.io/badge/commitizen-friendly-brightgreen.svg)](http://commitizen.github.io/cz-cli/)
-![GitHub](https://img.shields.io/github/license/Epic-Design-Labs/gatsby-source-optimizely)
-![npm](https://img.shields.io/npm/dt/@epicdesignlabs/gatsby-source-optimizely)
-![GitHub issues](https://img.shields.io/github/issues/Epic-Design-Labs/gatsby-source-optimizely)
-![GitHub closed issues](https://img.shields.io/github/issues-closed/Epic-Design-Labs/gatsby-source-optimizely)
-![GitHub pull requests](https://img.shields.io/github/issues-pr/Epic-Design-Labs/gatsby-source-optimizely)
-![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/Epic-Design-Labs/gatsby-source-optimizely)
-![GitHub contributors](https://img.shields.io/github/contributors/Epic-Design-Labs/gatsby-source-optimizely)
-![GitHub package.json version](https://img.shields.io/github/package-json/v/Epic-Design-Labs/gatsby-source-optimizely)
-![GitHub commit activity](https://img.shields.io/github/commit-activity/y/Epic-Design-Labs/gatsby-source-optimizely)
+![GitHub](https://img.shields.io/github/license/guyromellemagayano/gatsby-source-optimizely)
+![npm](https://img.shields.io/npm/dt/gatsby-source-optimizely)
+![GitHub issues](https://img.shields.io/github/issues/guyromellemagayano/gatsby-source-optimizely)
+![GitHub closed issues](https://img.shields.io/github/issues-closed/guyromellemagayano/gatsby-source-optimizely)
+![GitHub pull requests](https://img.shields.io/github/issues-pr/guyromellemagayano/gatsby-source-optimizely)
+![GitHub closed pull requests](https://img.shields.io/github/issues-pr-closed/guyromellemagayano/gatsby-source-optimizely)
+![GitHub contributors](https://img.shields.io/github/contributors/guyromellemagayano/gatsby-source-optimizely)
+![GitHub package.json version](https://img.shields.io/github/package-json/v/guyromellemagayano/gatsby-source-optimizely)
+![GitHub commit activity](https://img.shields.io/github/commit-activity/y/guyromellemagayano/gatsby-source-optimizely)
 
 ## Features
 
@@ -32,13 +32,13 @@ Provide support for the following features:
 For `npm`:
 
 ```console
-npm install @epicdesignlabs/gatsby-source-optimizely
+npm install gatsby-source-optimizely
 ```
 
 For `yarn`:
 
 ```console
-yarn add @epicdesignlabs/gatsby-source-optimizely
+yarn add gatsby-source-optimizely
 ```
 
 Setup this plugin in `gatsby-config.js` as follows **_(\*required fields)_**:
@@ -51,7 +51,7 @@ module.exports = {
     // ...
 
     {
-      resolve: "@epicdesignlabs/gatsby-source-optimizely",
+      resolve: "gatsby-source-optimizely",
       options: {
         auth: {
           site_url: process.env.OPTMIZELY_API_SITE_URL // The URL of the Optimizely/Episerver API site,
@@ -309,4 +309,4 @@ This source code is licensed under the **MIT** license found in the [LICENSE](LI
 
 ## Author
 
-[**Epic Design Labs**](https://epicdesignlabs.com)
+[**Guy Romelle Magayano**](https://guyromellemagayano.dev)
