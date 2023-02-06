@@ -13,6 +13,10 @@ This unofficial source plugin makes Optimizely/Episerver API data available in G
 ![GitHub package.json version](https://img.shields.io/github/package-json/v/guyromellemagayano/gatsby-source-optimizely)
 ![GitHub commit activity](https://img.shields.io/github/commit-activity/y/guyromellemagayano/gatsby-source-optimizely)
 
+## DEPRECATION NOTICE
+
+This plugin [@epicdesignlabs/gatsby-source-optimizely](https://www.npmjs.com/package/@epicdesignlabs/gatsby-source-optimizely) is no longer maintained and now officially deprecated. Please use this unofficial, but currently maintained [gatsby-source-optimizely](https://www.npmjs.com/package/gatsby-source-optimizely) plugin instead as Im still currently maintaining this plugin.
+
 ## Features
 
 Provide support for the following features:
